@@ -38,17 +38,11 @@ class VarExpr(Expr):
     def __init__(self, name):
         super().__init__()
         self.name = name
-    
-    def code_gen(self):
-        return str(self.name)
 
 class ConstExpr(Expr):
     def __init__(self, val):
         super().__init__()
         self.val = val
-
-    def code_gen(self):
-        return str(self.val)
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -83,6 +77,9 @@ class TensorExpr(Expr):
 
     def __setitem__(self, index, item):
         raise NotImplementedError
+    
+    def code_gen(self, ident=""):
+        pass
 
 def var(name):
     return VarExpr(name)
@@ -94,7 +91,8 @@ def compute(shape, function, name):
     tensor = TensorExpr(shape, name)
     tensor.producer = function(shape)
     tensor.producer_function = function
-    return TensorSliceExpr(tensor, shape)
+    tensor_slice = TensorSliceExpr(tensor, shape)
+    return tensor_slice
 
 def split(tensor_slice, axis_idx, factor):
     if not isinstance(tensor_slice, TensorSliceExpr):
