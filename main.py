@@ -1,18 +1,25 @@
 ADD = 0
 MUL = 1
 DIV = 2
+mapping = ["+", "*", "/"]
 
 class Expr:
     def __init__(self):
         pass
 
     def __add__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
         return BinaryExpr(self, other, ADD)
 
     def __mul__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
         return BinaryExpr(self, other, MUL)
 
     def __floordiv__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
         return BinaryExpr(self, other, DIV)
 
     __radd__ = __add__
@@ -24,13 +31,24 @@ class BinaryExpr(Expr):
         self.right = right
         self.type = type
 
+    def code_gen(self):
+        return "{0} {1} {2}".format(self.left.code_gen(), mapping[self.type], self.right.code_gen())
+
 class VarExpr(Expr):
-    def __init__(self, name="", start=0, length=-1, stride=1):
+    def __init__(self, name):
         super().__init__()
         self.name = name
-        self.start = start
-        self.length = length
-        self.stride = stride
+    
+    def code_gen(self):
+        return str(self.name)
+
+class ConstExpr(Expr):
+    def __init__(self, val):
+        super().__init__()
+        self.val = val
+
+    def code_gen(self):
+        return str(self.val)
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -38,10 +56,24 @@ class TensorSliceExpr(Expr):
         self.tensor = tensor
         self.index = index
 
+    def __getitem__(self, index):
+        return self.tensor[index]
+
+    def __setitem__(self, index, item):
+        raise NotImplementedError
+    
+    def code_gen(self, ident=""):
+        res = ""
+        for idx, axis in enumerate(self.tensor.axis):
+            res += ident + "for(int {0} = 0; {0} < {1}; {0} ++;) {{\n".format(self.tensor.name + "_iter_" + str(idx), axis.code_gen())
+            ident += "    "
+        return res
+    
 class TensorExpr(Expr):
     def __init__(self, shape, name):
         super().__init__()
         self.shape = shape
+        self.name = name
         self.producer = None
         self.producer_function = None
         self.axis = self.shape
@@ -77,8 +109,12 @@ def split(tensor_slice, axis_idx, factor):
     for i in range(len(old_axis)):
         if i == axis_idx:
             # new axis
-            outer = old_axis[i] // factor
-            inner = VarExpr(length=factor)
+            if isinstance(old_axis[i], ConstExpr):
+                outer = ConstExpr(old_axis[i].val // factor)
+            else:
+                outer = old_axis[i] // factor
+            # TODO: wrap factor into axis
+            inner = ConstExpr(factor)
             new_axis.append(outer)
             new_axis.append(inner)
             new_index.append(outer * factor + inner)
@@ -97,13 +133,15 @@ def reorder(tensor_slice, new_axis_idx):
     tensor.axis = tuple(new_axis)
 
 def compute_at(producer, consumer, axis_idx):
-    pass
+    consumer.tensor.axis[axis_idx].compute = producer
 
 def infer_bound(tensor_slice):
+    # TODO: only infer when there are const axis
     pass
 
 def lower(tensor_slice):
     infer_bound(tensor_slice)
+    return tensor_slice.code_gen()
 
 if __name__ == "__main__":
     # definition
@@ -118,4 +156,4 @@ if __name__ == "__main__":
     compute_at(B, C, 1)
 
     # lower
-    lower(C)
+    print(lower(C))
