@@ -78,6 +78,8 @@ class ConstExpr(Expr):
         return str(self.val)
 
 class IterVar(Expr):
+    NORMAL = 0
+    SPLIT = 1
     def __init__(self, name, start, end, stride=1):
         super().__init__()
         self.name = name
@@ -85,12 +87,17 @@ class IterVar(Expr):
         self.end = ConstExpr(end) if isinstance(end, int) else end
         self.stride = ConstExpr(stride) if isinstance(stride, int) else stride
         self.attached_computation = []
+        self.sub_axis = []
+        self.type = IterVar.NORMAL
 
     def __str__(self):
         return "{0}: [{1}, {2})".format(self.name, self.start, self.end)
 
     def CUDA_codegen(self):
-        return self.name
+        if self.type == IterVar.SPLIT:
+            return "{0} * {1} + {2}".format(self.sub_axis[0].CUDA_codegen(), self.sub_axis[1].end.CUDA_codegen(), self.sub_axis[1].CUDA_codegen())
+        else:
+            return self.name
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -105,7 +112,7 @@ class TensorSliceExpr(Expr):
         raise NotImplementedError
     
     def __str__(self):
-        return self.tensor.name + "[" + ", ".join([index for index in self.index]) + "]" 
+        return self.tensor.name + "[" + ", ".join([str(index) for index in self.index]) + "]" 
 
     def CUDA_codegen(self):
         return self.tensor.name + "[" + ", ".join([index.CUDA_codegen() for index in self.index]) + "]" 
@@ -113,12 +120,13 @@ class TensorSliceExpr(Expr):
 class TensorExpr(Expr):
     def __init__(self, shape, name):
         super().__init__()
-        self.shape = [ConstExpr(s) if isinstance(s, int) else s for s in shape]
+        self.shape = tuple([ConstExpr(s) if isinstance(s, int) else s for s in shape])
         self.name = name
         self.axis = tuple([IterVar(name + "." + str(i), 0, v) for i, v in enumerate(self.shape)])
         self.index = self.axis
         self.producer = None
         self.producer_function = None
+        self.producer_tensor = []
 
     def __getitem__(self, index):
         return TensorSliceExpr(self, index)
@@ -169,52 +177,48 @@ def compute(shape, function, name):
     return tensor
 
 def split(tensor, axis_idx, factor):
+    new_axis = []
     if not isinstance(tensor, TensorExpr):
         raise ValueError("Expect TensorExpr not {0}".format(type(tensor)))
-    old_axis = tensor.axis
-    new_axis = []
-    new_index = []
-    
-    if axis_idx < 0 or axis_idx >= len(old_axis):
-        raise ValueError("axis_idx should be in range(0, {0})".format(len(old_axis)))
-    for i, axis in enumerate(old_axis):
-        if i == axis_idx:
-            # new axis
+    for i, axis in enumerate(tensor.axis):
+        if axis_idx == i:
             outer = IterVar(axis.name + ".outer", 0, axis.end // factor)
             inner = IterVar(axis.name + ".inner", 0, ConstExpr(factor))
+            axis.sub_axis.append(outer)
+            axis.sub_axis.append(inner)
+            axis.type = IterVar.SPLIT
             new_axis.append(outer)
             new_axis.append(inner)
-            new_index.append(outer * factor + inner)
         else:
             new_axis.append(axis)
     tensor.axis = tuple(new_axis)
-    tensor.index = tuple(new_index)
-    tensor.producer = tensor.producer_function(new_index)
-    tensor.producer_tensor = collect_producer_tensor(tensor.producer)
+    return outer, inner
 
-def reorder(tensor, new_axis_idx):
-    old_axis = tensor.axis
-    new_axis = []
-    for idx in new_axis_idx:
-        new_axis.append(old_axis[idx])
-    tensor.axis = tuple(new_axis)
+def reorder(tensor, axis):
+    if len(axis) != len(tensor.axis):
+        raise ValueError("should provide {0} axis".format(len(axis)))
+    tensor.axis = tuple(axis)
 
 def compute_at(producer, consumer, axis_idx):
     consumer.axis[axis_idx].attached_computation.append(producer)
 
-def infer_bound(tensor, intervals):
+def infer_bound(tensor):
     # TODO: only infer when there are const axis
+    fixed_axis = []
     for idx, axis in enumerate(tensor.axis):
-        for producer_tensor in tensor.producer_tensor:
-            infer_bound(producer_tensor.tensor, [])
+        fixed_axis.append(axis)
+        for computation in axis.attached_computation:
+            for producer_tensor in tensor.producer_tensor:
+                if producer_tensor.tensor is computation:
+                    [evaluate_expr_range(index, fixed_axis) for index in producer_tensor.index]
 
-def evaluate_expr_range(expr, frozen_axis):
-    # TODO: skip frozen axis
+
+def evaluate_expr_range(expr, fixed_axis):
     if isinstance(expr, IterVar):
         return expr
     elif isinstance(expr, BinaryExpr):
-        left = evaluate_expr_range(expr.left)
-        right = evaluate_expr_range(expr.right)
+        left = evaluate_expr_range(expr.left, fixed_axis)
+        right = evaluate_expr_range(expr.right, fixed_axis)
         if expr.type == ADD:
             return IterVar("", left.start + right.start, left.end + right.end)
         if expr.type == SUB:
@@ -228,8 +232,7 @@ def evaluate_expr_range(expr, frozen_axis):
 
 
 def lower(tensor):
-    intervals = [evaluate_expr_range(index, 0) for index in tensor.index]
-    infer_bound(tensor, intervals)
+    # infer_bound(tensor)
     return tensor.CUDA_codegen()
 
 if __name__ == "__main__":
@@ -241,9 +244,9 @@ if __name__ == "__main__":
     C = compute((m, ), lambda i: 3 + B[i], name = "C")
 
     # schedule
-    split(C, 0, 32)
-    reorder(C, (1, 0))
-    compute_at(B, C, 1)
+    outer, inner = split(C, 0, 32)
+    reorder(C, (inner, outer))
+    compute_at(B, C, 0)
 
     # lower
     print(lower(C))
