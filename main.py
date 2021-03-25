@@ -185,7 +185,7 @@ def split(tensor, axis_idx, factor):
     for i, axis in enumerate(tensor.axis):
         if axis_idx == i:
             outer = IterVar(axis.name + ".outer", 0, axis.end // factor)
-            inner = IterVar(axis.name + ".inner", 0, ConstExpr(factor))
+            inner = IterVar(axis.name + ".inner", 0, factor)
             axis.sub_axis.append(outer)
             axis.sub_axis.append(inner)
             axis.type = IterVar.SPLIT
