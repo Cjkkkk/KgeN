@@ -220,6 +220,7 @@ def infer_bound(tensor):
                         p_axis.fixed = intervals[p_i].fixed
 
 def evaluate_expr_range(expr):
+    # TODO: case by case based on SPLIT
     if isinstance(expr, IterVar):
         interval = IterVar("", expr.start, expr.end)
         if expr.type == IterVar.SPLIT:
@@ -227,7 +228,6 @@ def evaluate_expr_range(expr):
         else:
             interval.fixed = expr.frozen
     elif isinstance(expr, BinaryExpr):
-        raise NotImplementedError
         left = evaluate_expr_range(expr.left)
         right = evaluate_expr_range(expr.right)
         if expr.type == ADD:
@@ -241,7 +241,6 @@ def evaluate_expr_range(expr):
         interval.fixed = left.fixed and right.fixed
         interval.fixed_val = expr
     else:
-        raise NotImplementedError
         interval = IterVar("", expr, expr + 1)
         interval.fixed = True
     return interval
