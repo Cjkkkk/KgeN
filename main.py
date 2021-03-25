@@ -89,6 +89,7 @@ class IterVar(Expr):
         self.attached_computation = []
         self.sub_axis = []
         self.type = IterVar.NORMAL
+        self.fixed = False
 
     def __str__(self):
         return "{0}: [{1}, {2})".format(self.name, self.start, self.end)
@@ -123,6 +124,7 @@ class TensorExpr(Expr):
         self.shape = tuple([ConstExpr(s) if isinstance(s, int) else s for s in shape])
         self.name = name
         self.axis = tuple([IterVar(name + "." + str(i), 0, v) for i, v in enumerate(self.shape)])
+        self.old_axis = self.axis
         self.index = self.axis
         self.producer = None
         self.producer_function = None
@@ -139,7 +141,8 @@ class TensorExpr(Expr):
 
     def CUDA_codegen(self, indent=0):
         res = ""
-        closing = "".join(["    " * (len(self.axis) - 1 - i + indent) + "}\n" for i in range(len(self.axis))])
+        # TODO: fixed this
+        closing = "".join(["    " * (len(self.axis) - 1 - i + indent) + "}\n" for i, axis in enumerate(self.axis) if not axis.fixed])
         # compose loop
         for i, axis in enumerate(self.axis):
             res += "    " * (i + indent) + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
@@ -199,36 +202,49 @@ def reorder(tensor, axis):
         raise ValueError("should provide {0} axis".format(len(axis)))
     tensor.axis = tuple(axis)
 
-def compute_at(producer, consumer, axis_idx):
-    consumer.axis[axis_idx].attached_computation.append(producer)
+def compute_at(producer, consumer, axis):
+    axis.attached_computation.append(producer)
 
 def infer_bound(tensor):
-    # TODO: only infer when there are const axis
-    fixed_axis = []
     for idx, axis in enumerate(tensor.axis):
-        fixed_axis.append(axis)
+        axis.frozen = True
         for computation in axis.attached_computation:
             for producer_tensor in tensor.producer_tensor:
                 if producer_tensor.tensor is computation:
-                    [evaluate_expr_range(index, fixed_axis) for index in producer_tensor.index]
+                    intervals = [evaluate_expr_range(index) for index in producer_tensor.index]
+                    # Adjust original axis interval
+                    for p_i, p_axis in enumerate(producer_tensor.tensor.old_axis):
+                        p_axis.start = intervals[p_i].start
+                        p_axis.end = intervals[p_i].end
+                        p_axis.stride = intervals[p_i].stride
+                        p_axis.fixed = intervals[p_i].fixed
 
-
-def evaluate_expr_range(expr, fixed_axis):
+def evaluate_expr_range(expr):
     if isinstance(expr, IterVar):
-        return expr
+        interval = IterVar("", expr.start, expr.end)
+        if expr.type == IterVar.SPLIT:
+            interval.fixed = expr.sub_axis[0].frozen and expr.sub_axis[1].frozen
+        else:
+            interval.fixed = expr.frozen
     elif isinstance(expr, BinaryExpr):
-        left = evaluate_expr_range(expr.left, fixed_axis)
-        right = evaluate_expr_range(expr.right, fixed_axis)
+        raise NotImplementedError
+        left = evaluate_expr_range(expr.left)
+        right = evaluate_expr_range(expr.right)
         if expr.type == ADD:
-            return IterVar("", left.start + right.start, left.end + right.end)
+            interval = IterVar("", left.start + right.start, left.end + right.end)
         if expr.type == SUB:
-            return IterVar("", left.start - right.start, left.end - right.end)
+            interval = IterVar("", left.start - right.start, left.end - right.end)
         elif expr.type == MUL:
-            return IterVar("", left.start * right.start, (left.end - 1) * (right.end - 1))
+            interval = IterVar("", left.start * right.start, (left.end - 1) * (right.end - 1))
         else:
             raise ValueError("Unsupported type.")
+        interval.fixed = left.fixed and right.fixed
+        interval.fixed_val = expr
     else:
-        return IterVar("", expr, expr + 1)
+        raise NotImplementedError
+        interval = IterVar("", expr, expr + 1)
+        interval.fixed = True
+    return interval
 
 
 def lower(tensor):
@@ -246,7 +262,7 @@ if __name__ == "__main__":
     # schedule
     outer, inner = split(C, 0, 32)
     reorder(C, (inner, outer))
-    compute_at(B, C, 0)
+    compute_at(B, C, inner)
 
     # lower
     print(lower(C))
