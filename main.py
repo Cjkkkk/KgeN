@@ -1,10 +1,9 @@
-ADD = 0
-MUL = 1
-DIV = 2
-SUB = 3
-mapping = ["+", "*", "/", "-"]
-
 class Expr:
+    ADD = 0
+    MUL = 1
+    DIV = 2
+    SUB = 3
+    mapping = ["+", "*", "/", "-"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -13,21 +12,21 @@ class Expr:
             other = ConstExpr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val + other.val)
-        return BinaryExpr(self, other, ADD)
+        return BinaryExpr(self, other, Expr.ADD)
 
     def __mul__(self, other):
         if isinstance(other, int):
             other = ConstExpr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val * other.val)
-        return BinaryExpr(self, other, MUL)
+        return BinaryExpr(self, other, Expr.MUL)
 
     def __floordiv__(self, other):
         if isinstance(other, int):
             other = ConstExpr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val // other.val)
-        return BinaryExpr(self, other, DIV)
+        return BinaryExpr(self, other, Expr.DIV)
     
     def __sub__(self, other):
         if isinstance(other, int):
@@ -50,10 +49,10 @@ class BinaryExpr(Expr):
         self.type = type
 
     def __str__(self):
-        return "{0} {1} {2}".format(self.left, mapping[self.type], self.right)
+        return "{0} {1} {2}".format(self.left, Expr.mapping[self.type], self.right)
 
     def CUDA_codegen(self):
-        return "{0} {1} {2}".format(self.left.CUDA_codegen(), mapping[self.type], self.right.CUDA_codegen())
+        return "{0} {1} {2}".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
 
 class VarExpr(Expr):
     def __init__(self, name):
