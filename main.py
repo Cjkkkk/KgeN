@@ -145,7 +145,8 @@ class TensorExpr(Expr):
         self.inputs = {}
         self.axis = ()
         self.root_axis = ()
-
+        self.fixed_axis = ()
+        
         if tensor_type == TensorExpr.COMPUTE:
             self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i], 0, v) for i, v in enumerate(self.shape)])
             self.root_axis = self.axis
@@ -258,13 +259,13 @@ def fuse(tensor, axis_tuple):
     return new_axis
     
 def compute_at(producer, consumer, axis):
-    producer.fixed_axis = []
+    fixed_axis = []
     for ax in consumer.axis:
-        producer.fixed_axis.append(ax)
+        fixed_axis.append(ax)
         if ax is axis:
-            producer.fixed_axis.append(ax)
             break
     producer.attached = True
+    producer.fixed_axis = tuple(fixed_axis)
     axis.attached_computation.append(producer)
 
 
@@ -289,7 +290,7 @@ def infer_bound_pass(tensor):
         for tensor_input in tensor.inputs:
             # TODO: unite ranges
             for tensor_input_expr in tensor.inputs[tensor_input]:
-                ranges = [evaluate_expr_range(index, []) for index in tensor_input_expr.index]
+                ranges = [evaluate_expr_range(index, tensor_input.fixed_axis) for index in tensor_input_expr.index]
             for p_i, p_axis in enumerate(tensor_input.root_axis):
                     p_axis.range.start = ranges[p_i].start
                     p_axis.range.end = ranges[p_i].end
@@ -308,6 +309,7 @@ def evaluate_expr_range(expr, fixed_axis):
         if expr.type == IterVar.SPLIT:
             interval = evaluate_expr_range(expr.outer * expr.inner.range.end + expr.inner, fixed_axis)
         elif expr in fixed_axis:
+            
             interval = Range(expr, expr + 1)
         else:
             interval = Range(expr.range.start, expr.range.end)
