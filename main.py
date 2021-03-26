@@ -3,7 +3,8 @@ class Expr:
     MUL = 1
     DIV = 2
     SUB = 3
-    mapping = ["+", "*", "/", "-"]
+    MOD = 4
+    mapping = ["+", "*", "/", "-", "%"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -35,6 +36,12 @@ class Expr:
             return ConstExpr(self.val - other.val)
         return BinaryExpr(self, other, Expr.SUB)
 
+    def __mod__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(self.val % other.val)
+        return BinaryExpr(self, other, Expr.MOD)
     __radd__ = __add__
     __rmul__ = __mul__
 
@@ -49,10 +56,10 @@ class BinaryExpr(Expr):
         self.type = type
 
     def __str__(self):
-        return "{0} {1} {2}".format(self.left, Expr.mapping[self.type], self.right)
+        return "({0} {1} {2})".format(self.left, Expr.mapping[self.type], self.right)
 
     def CUDA_codegen(self):
-        return "{0} {1} {2}".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
+        return "({0} {1} {2})".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
 
 class VarExpr(Expr):
     def __init__(self, name):
@@ -79,6 +86,7 @@ class ConstExpr(Expr):
 class IterVar(Expr):
     NORMAL = 0
     SPLIT = 1
+    FUSE = 2
     def __init__(self, name, start, end, stride=1):
         super().__init__()
         self.name = name
@@ -86,7 +94,6 @@ class IterVar(Expr):
         self.end = ConstExpr(end) if isinstance(end, int) else end
         self.stride = ConstExpr(stride) if isinstance(stride, int) else stride
         self.attached_computation = []
-        self.sub_axis = []
         self.type = IterVar.NORMAL
 
     def __str__(self):
@@ -94,7 +101,12 @@ class IterVar(Expr):
 
     def CUDA_codegen(self):
         if self.type == IterVar.SPLIT:
-            return "{0} * {1} + {2}".format(self.sub_axis[0].CUDA_codegen(), self.sub_axis[1].end.CUDA_codegen(), self.sub_axis[1].CUDA_codegen())
+            return "(({0} * {1}) + {2})".format(self.outer.CUDA_codegen(), self.inner.end.CUDA_codegen(), self.inner.CUDA_codegen())
+        if self.type == IterVar.FUSE:
+            if self is self.fused_axis.outer:
+                return "({0} // {1})".format(self.fused_axis.CUDA_codegen(), self.fused_axis.inner.end.CUDA_codegen())
+            else:
+                return "({0} % {1})".format(self.fused_axis.CUDA_codegen(), self.fused_axis.outer.end.CUDA_codegen())
         else:
             return self.name
 
@@ -127,7 +139,7 @@ class TensorExpr(Expr):
         self.compute_func = compute_func
         if tensor_type == TensorExpr.COMPUTE:
             self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i], 0, v) for i, v in enumerate(self.shape)])
-            self.old_axis = self.axis
+            self.root_axis = self.axis
             self.index = self.axis
             self.producer = compute_func(self.axis)
 
@@ -178,16 +190,16 @@ def compute(shape, function, name):
     tensor.producer_tensor = collect_producer_tensor(tensor.producer)
     return tensor
 
-def split(tensor, axis_idx, factor):
+def split(tensor, ax, factor):
     new_axis = []
     if not isinstance(tensor, TensorExpr):
         raise ValueError("Expect TensorExpr not {0}".format(type(tensor)))
-    for i, axis in enumerate(tensor.axis):
-        if axis_idx == i:
+    for axis in tensor.axis:
+        if ax is axis:
             outer = IterVar(axis.name + "_outer", 0, axis.end // factor)
             inner = IterVar(axis.name + "_inner", 0, factor)
-            axis.sub_axis.append(outer)
-            axis.sub_axis.append(inner)
+            axis.outer = outer
+            axis.inner = inner
             axis.type = IterVar.SPLIT
             new_axis.append(outer)
             new_axis.append(inner)
@@ -196,15 +208,38 @@ def split(tensor, axis_idx, factor):
     tensor.axis = tuple(new_axis)
     return outer, inner
 
-def reorder(tensor, axis):
-    if len(axis) != len(tensor.axis):
-        raise ValueError("should provide {0} axis".format(len(axis)))
-    tensor.axis = tuple(axis)
+def reorder(tensor, axis_tuple):
+    if len(axis_tuple) != len(tensor.axis):
+        raise ValueError("should provide {0} axis".format(len(axis_tuple)))
+    tensor.axis = tuple(axis_tuple)
 
+def fuse(tensor, axis_tuple):
+    new_axis = []
+    # set axis to fuse
+    fused_axis = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", 0, axis_tuple[0].end * axis_tuple[1].end)
+    
+    axis_tuple[0].type = IterVar.FUSE
+    axis_tuple[1].type = IterVar.FUSE
+    
+    axis_tuple[0].fused_axis = fused_axis
+    axis_tuple[1].fused_axis = fused_axis
+
+    fused_axis.outer = axis_tuple[0]
+    fused_axis.inner = axis_tuple[1]
+
+    # TODO: fix range of fused_axis
+    for axis in tensor.axis:
+        if not axis in axis_tuple:
+            new_axis.append(axis)
+        if axis is axis_tuple[0]:
+            new_axis.append(fused_axis)
+    tensor.axis = tuple(new_axis)
+    return new_axis
+    
 def compute_at(producer, consumer, axis):
     axis.attached_computation.append(producer)
 
-def infer_bound(tensor):
+def infer_bound_pass(tensor):
     fixed_axis = []
     for idx, axis in enumerate(tensor.axis):
         fixed_axis.append(axis)
@@ -213,14 +248,14 @@ def infer_bound(tensor):
                 if producer_tensor.tensor is computation:
                     intervals = [evaluate_expr_range(index, fixed_axis) for index in producer_tensor.index]
                     # Adjust original axis interval
-                    for p_i, p_axis in enumerate(producer_tensor.tensor.old_axis):
+                    for p_i, p_axis in enumerate(producer_tensor.tensor.root_axis):
                         p_axis.start = intervals[p_i].start
                         p_axis.end = intervals[p_i].end
 
 def evaluate_expr_range(expr, fixed_axis):
     if isinstance(expr, IterVar):
         if expr.type == IterVar.SPLIT:
-            interval = evaluate_expr_range(expr.sub_axis[0] * expr.sub_axis[1].end + expr.sub_axis[1], fixed_axis)
+            interval = evaluate_expr_range(expr.outer * expr.inner.end + expr.inner, fixed_axis)
         elif expr in fixed_axis:
             interval = IterVar("", expr, expr + 1)
         else:
@@ -242,7 +277,7 @@ def evaluate_expr_range(expr, fixed_axis):
 
 
 def lower(tensor):
-    infer_bound(tensor)
+    infer_bound_pass(tensor)
     return tensor.CUDA_codegen()
 
 if __name__ == "__main__":
@@ -254,7 +289,8 @@ if __name__ == "__main__":
     C = compute((m, ), lambda i: 3 + B[i], name = "C")
 
     # schedule
-    outer, inner = split(C, 0, 32)
+    outer, inner = split(C, C.axis[0], 32)
+    # fused = fuse(C, (outer, inner))
     # reorder(C, (inner, outer))
     compute_at(B, C, outer)
 
