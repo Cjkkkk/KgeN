@@ -1,3 +1,6 @@
+import math
+
+
 class Expr:
     ADD = 0
     MUL = 1
@@ -219,8 +222,8 @@ def split(tensor, ax, factor):
         raise ValueError("Expect TensorExpr not {0}".format(type(tensor)))
     for axis in tensor.axis:
         if ax is axis:
-            outer = IterVar(axis.name + "_outer", 0, 0)
-            inner = IterVar(axis.name + "_inner", 0, 0)
+            outer = IterVar(axis.name + "_outer", math.inf, math.inf)
+            inner = IterVar(axis.name + "_inner", math.inf, math.inf)
             axis.outer = outer
             axis.inner = inner
             axis.factor = factor
@@ -240,7 +243,7 @@ def reorder(tensor, axis_tuple):
 def fuse(tensor, axis_tuple):
     new_axis = []
     # set axis to fuse
-    fused = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", 0, 0)
+    fused = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", math.inf, math.inf)
     
     axis_tuple[0].type = IterVar.FUSE
     axis_tuple[1].type = IterVar.FUSE
@@ -251,12 +254,9 @@ def fuse(tensor, axis_tuple):
     fused.outer = axis_tuple[0]
     fused.inner = axis_tuple[1]
 
-    # TODO: fix range of fused
     for axis in tensor.axis:
-        if not axis in axis_tuple:
+        if axis is not axis_tuple[1]:
             new_axis.append(axis)
-        if axis is axis_tuple[0]:
-            new_axis.append(fused)
     tensor.axis = tuple(new_axis)
     return new_axis
     
