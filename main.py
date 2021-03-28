@@ -107,10 +107,10 @@ class IterVar(Expr):
         if self.type == IterVar.SPLIT:
             return "(({0} * {1}) + {2})".format(self.outer.CUDA_codegen(), self.inner.range.end.CUDA_codegen(), self.inner.CUDA_codegen())
         if self.type == IterVar.FUSE:
-            if self is self.fused_axis.outer:
-                return "({0} // {1})".format(self.fused_axis.CUDA_codegen(), self.fused_axis.inner.range.end.CUDA_codegen())
+            if self is self.fused.outer:
+                return "({0} // {1})".format(self.fused.CUDA_codegen(), self.fused.inner.range.end.CUDA_codegen())
             else:
-                return "({0} % {1})".format(self.fused_axis.CUDA_codegen(), self.fused_axis.outer.range.end.CUDA_codegen())
+                return "({0} % {1})".format(self.fused.CUDA_codegen(), self.fused.outer.range.end.CUDA_codegen())
         else:
             return self.name
 
@@ -121,7 +121,8 @@ class TensorSliceExpr(Expr):
         self.index = index
 
     def __getitem__(self, index):
-        return self.tensor[index]
+        raise NotImplementedError
+        # return self.tensor[index]
 
     def __setitem__(self, index, item):
         raise NotImplementedError
@@ -142,7 +143,8 @@ class TensorExpr(Expr):
         self.type = tensor_type
         self.compute_func = compute_func
         self.attached = False
-        self.inputs = {}
+        self.inputs = []
+        self.consumers = []
         self.axis = ()
         self.root_axis = ()
         self.fixed_axis = ()
@@ -155,7 +157,9 @@ class TensorExpr(Expr):
             self.inputs = collect_inputs(self.expr)
 
     def __getitem__(self, index):
-        return TensorSliceExpr(self, index)
+        tensor_slice = TensorSliceExpr(self, index)
+        self.consumers.append(tensor_slice)
+        return tensor_slice
 
     def __setitem__(self, index, item):
         raise NotImplementedError
@@ -190,23 +194,20 @@ def placeholder(shape, name):
     return TensorExpr(shape, name, TensorExpr.PLACEHOLDER)
 
 def collect_inputs(producer):
-    res = {}
+    inputs = set()
     q = [producer]
     while len(q) > 0:
         expr = q.pop()
         if isinstance(expr, TensorSliceExpr):
-            if expr.tensor not in res:
-                res[expr.tensor] = [expr]
-            else:
-                res[expr.tensor].append(expr)
+            inputs.add(expr.tensor)
             for index in expr.index:
                 q.append(index)
         if isinstance(expr, BinaryExpr):
             for subexpr in expr.subexprs:
                 q.append(subexpr)
-    # for k, v in res.items():
-    #     print(k, len(v))
-    return res
+    # for i in inputs:
+    #     print(i)
+    return list(inputs)
 
 def compute(shape, function, name):
     tensor = TensorExpr(shape, name, TensorExpr.COMPUTE, function)
@@ -218,10 +219,11 @@ def split(tensor, ax, factor):
         raise ValueError("Expect TensorExpr not {0}".format(type(tensor)))
     for axis in tensor.axis:
         if ax is axis:
-            outer = IterVar(axis.name + "_outer", 0, axis.range.end // factor)
-            inner = IterVar(axis.name + "_inner", 0, factor)
+            outer = IterVar(axis.name + "_outer", 0, 0)
+            inner = IterVar(axis.name + "_inner", 0, 0)
             axis.outer = outer
             axis.inner = inner
+            axis.factor = factor
             axis.type = IterVar.SPLIT
             new_axis.append(outer)
             new_axis.append(inner)
@@ -238,23 +240,23 @@ def reorder(tensor, axis_tuple):
 def fuse(tensor, axis_tuple):
     new_axis = []
     # set axis to fuse
-    fused_axis = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", 0, axis_tuple[0].range.end * axis_tuple[1].range.end)
+    fused = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", 0, 0)
     
     axis_tuple[0].type = IterVar.FUSE
     axis_tuple[1].type = IterVar.FUSE
     
-    axis_tuple[0].fused_axis = fused_axis
-    axis_tuple[1].fused_axis = fused_axis
+    axis_tuple[0].fused = fused
+    axis_tuple[1].fused = fused
 
-    fused_axis.outer = axis_tuple[0]
-    fused_axis.inner = axis_tuple[1]
+    fused.outer = axis_tuple[0]
+    fused.inner = axis_tuple[1]
 
-    # TODO: fix range of fused_axis
+    # TODO: fix range of fused
     for axis in tensor.axis:
         if not axis in axis_tuple:
             new_axis.append(axis)
         if axis is axis_tuple[0]:
-            new_axis.append(fused_axis)
+            new_axis.append(fused)
     tensor.axis = tuple(new_axis)
     return new_axis
     
@@ -272,7 +274,7 @@ def compute_at(producer, consumer, axis):
 def topo_sort(tensor):
     res = [tensor]
     q = [tensor]
-    visited = {tensor} # TODO: set(tensor)
+    visited = {tensor}
     while len(q) > 0:
         t = q.pop()
         for input_tensor in t.inputs:
@@ -280,20 +282,72 @@ def topo_sort(tensor):
                 visited.add(input_tensor)
                 res.append(input_tensor)
                 q.append(input_tensor)
-    # for t in res:
-    #     print(t)
     return res
+
+def infer_root_iter_bound(tensor, rmap):
+    if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's axis
+        if len(tensor.consumers) > 0:
+            bounds = None
+            for consumer in tensor.consumers:
+                new_bounds = [evaluate_expr_bound(index, tensor.fixed_axis) for index in consumer.index]
+            if bounds is None:
+                bounds =  new_bounds
+            else:
+                # TODO: consolidate bounds
+                # for i, bound in enumerate(new_bounds):
+                #     bounds[i] = range(min(), max(), 1)
+                pass
+            for i, root_axis in enumerate(tensor.root_axis):
+                root_axis.range = bounds[i]
+                rmap[root_axis] = bounds[i]
+        else:
+            # is output tensor, therefor no consumers
+            for root_axis in tensor.root_axis:
+                rmap[root_axis] = root_axis.range
+
+def pass_down(tensor, rmap):
+    if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's axis
+        for axis in rmap:
+            if axis.type == IterVar.SPLIT:
+                rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
+                rmap[axis.inner] = Range(0, axis.factor)
+                axis.outer.range = rmap[axis.outer]
+                axis.inner.range = rmap[axis.inner]
+            elif axis.type == IterVar.FUSE:
+                rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
+                axis.fused.range = rmap[axis.fused]
+            else:
+                # we already know root_axis's range
+                pass
+
+def get_rmap(tensor):
+    rmap = {}
+    if tensor.type != TensorExpr.PLACEHOLDER:
+        for axis in tensor.root_axis:
+            rmap[axis] = axis.range
+
+    q = list(rmap.keys())
+    while len(q) > 0:
+        axis = q.pop()
+        if axis.type == IterVar.SPLIT:
+            rmap[axis.outer] = axis.outer.range
+            rmap[axis.inner] = axis.inner.range
+            q.append(axis.outer)
+            q.append(axis.inner)
+        elif axis.type == IterVar.FUSE:
+            rmap[axis.fused] = axis.fused.range
+            q.append(axis.fused)
+        else:
+            pass
+    return rmap
 
 def infer_bound_pass(tensor):
     tensors = topo_sort(tensor)
     for tensor in tensors:
-        for tensor_input in tensor.inputs:
-            # TODO: unite ranges
-            for tensor_input_expr in tensor.inputs[tensor_input]:
-                ranges = [evaluate_expr_range(index, tensor_input.fixed_axis) for index in tensor_input_expr.index]
-            for p_i, p_axis in enumerate(tensor_input.root_axis):
-                    p_axis.range.start = ranges[p_i].start
-                    p_axis.range.end = ranges[p_i].end
+        rmap = get_rmap(tensor)
+        infer_root_iter_bound(tensor, rmap)
+        pass_down(tensor, rmap)
+
 
 def CUDA_codegen_pass(tensor):
     tensors = topo_sort(tensor)
@@ -304,18 +358,17 @@ def CUDA_codegen_pass(tensor):
             res += t.CUDA_codegen()
     return res
 
-def evaluate_expr_range(expr, fixed_axis):
+def evaluate_expr_bound(expr, fixed_axis):
     if isinstance(expr, IterVar):
         if expr.type == IterVar.SPLIT:
-            interval = evaluate_expr_range(expr.outer * expr.inner.range.end + expr.inner, fixed_axis)
+            interval = evaluate_expr_bound(expr.outer * expr.inner.range.end + expr.inner, fixed_axis)
         elif expr in fixed_axis:
-            
             interval = Range(expr, expr + 1)
         else:
             interval = Range(expr.range.start, expr.range.end)
     elif isinstance(expr, BinaryExpr):
-        left = evaluate_expr_range(expr.left, fixed_axis)
-        right = evaluate_expr_range(expr.right, fixed_axis)
+        left = evaluate_expr_bound(expr.left, fixed_axis)
+        right = evaluate_expr_bound(expr.right, fixed_axis)
         if expr.type == Expr.ADD:
             interval = Range(left.start + right.start, left.end + right.end)
         elif expr.type == Expr.SUB:
