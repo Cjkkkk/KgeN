@@ -292,8 +292,6 @@ def collect_inputs(producer):
         if isinstance(expr, BinaryExpr):
             for subexpr in expr.subexprs:
                 q.append(subexpr)
-    # for i in inputs:
-    #     print(i)
     return list(inputs)
 
 def compute(shape, function, name):
