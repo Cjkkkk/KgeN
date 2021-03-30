@@ -159,12 +159,17 @@ class IterVar(Expr):
     NORMAL = 0
     SPLIT = 1
     FUSE = 2
+
+    NONE = 3
+    BIND = 4
     def __init__(self, name, start, end):
         super().__init__()
         self.name = name
         self.range = Range(start, end)
         self.attached_computation = []
         self.type = IterVar.NORMAL
+        self.bind_type = IterVar.NONE
+        self.bind_name = ""
 
     def __str__(self):
         return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == RangeType.CLOSED_CLOSED else ")")
@@ -180,6 +185,8 @@ class IterVar(Expr):
         else:
             if self.range.is_single_point:
                 return self.range.start.CUDA_codegen()
+            elif self.bind_type == IterVar.BIND:
+                return self.bind_name
             else:
                 return self.name
 
@@ -259,7 +266,7 @@ class TensorExpr(Expr):
         scope = indent
         # compose loop
         for i, axis in enumerate(self.axis):
-            if not axis.range.is_single_point:
+            if not axis.range.is_single_point and not axis.bind_type == IterVar.BIND:
                 opening += "    " * scope + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
                     axis.name, 
                     axis.range.start.CUDA_codegen(),
@@ -297,6 +304,11 @@ def collect_inputs(producer):
 def compute(shape, function, name):
     tensor = TensorExpr(shape, name, TensorExpr.COMPUTE, function)
     return tensor
+
+
+def bind(tensor, ax, name):
+    ax.bind_type = IterVar.BIND
+    ax.bind_name = name
 
 def split(tensor, ax, factor):
     new_axis = []
