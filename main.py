@@ -7,7 +7,7 @@ class Expr:
     DIV = 2
     SUB = 3
     MOD = 4
-    mapping = ["+", "*", "/", "-", "%"]
+    mapping = ["+", "*", "//", "-", "%"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -139,13 +139,16 @@ class IterVar(Expr):
     def CUDA_codegen(self):
         if self.type == IterVar.SPLIT:
             return "(({0} * {1}) + {2})".format(self.outer.CUDA_codegen(), self.inner.range.end.CUDA_codegen(), self.inner.CUDA_codegen())
-        if self.type == IterVar.FUSE:
+        elif self.type == IterVar.FUSE:
             if self is self.fused.outer:
                 return "({0} // {1})".format(self.fused.CUDA_codegen(), self.fused.inner.range.end.CUDA_codegen())
             else:
-                return "({0} % {1})".format(self.fused.CUDA_codegen(), self.fused.outer.range.end.CUDA_codegen())
+                return "({0} % {1})".format(self.fused.CUDA_codegen(), self.fused.inner.range.end.CUDA_codegen())
         else:
-            return self.name
+            if self.range.is_single_point:
+                return self.range.start.CUDA_codegen()
+            else:
+                return self.name
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -205,19 +208,25 @@ class TensorExpr(Expr):
             return ""
         opening = ""
         closing = ""
+        scope = indent
         # compose loop
         for i, axis in enumerate(self.axis):
-            opening += "    " * (i + indent) + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
-                axis.name, 
-                axis.range.start.CUDA_codegen(),
-                axis.range.end.CUDA_codegen(),
-                1)
+            if axis.range.is_single_point:
+                # opening += "    " * scope + "int {0} = {1};\n".format(axis.name, axis.range.start.CUDA_codegen())
+                pass
+            else:
+                opening += "    " * scope + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
+                    axis.name, 
+                    axis.range.start.CUDA_codegen(),
+                    axis.range.end.CUDA_codegen(),
+                    1)
+                closing = "    " * scope + "}\n" + closing
+                scope += 1
             
             for computation in axis.attached_computation:
-                opening += computation.CUDA_codegen(i + 1)
+                opening += computation.CUDA_codegen(scope)
             
-            closing += "    " * (len(self.axis) - i - 1 + indent) + "}\n"
-        body = "    " * (len(self.axis) + indent) + TensorSliceExpr(self, self.index).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
+        body = "    " * scope + TensorSliceExpr(self, self.index).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
         return opening + body + closing
 
 def var(name):
@@ -285,10 +294,14 @@ def fuse(tensor, axis_tuple):
     fused.inner = axis_tuple[1]
 
     for axis in tensor.axis:
-        if axis is not axis_tuple[1]:
+        if axis is axis_tuple[0]:
+            new_axis.append(fused)
+        elif axis is axis_tuple[1]:
+            continue
+        else:
             new_axis.append(axis)
     tensor.axis = tuple(new_axis)
-    return new_axis
+    return fused
     
 def compute_at(producer, consumer, axis):
     fixed_axis = []
@@ -392,6 +405,11 @@ def evaluate_expr_bound(expr, fixed_axis):
     if isinstance(expr, IterVar):
         if expr.type == IterVar.SPLIT:
             interval = evaluate_expr_bound(expr.outer * expr.inner.range.end + expr.inner, fixed_axis)
+        elif expr.type == IterVar.FUSE:
+            if expr is expr.fused.outer:
+                interval = evaluate_expr_bound(expr.fused // expr.fused.inner.range.end, fixed_axis)
+            else:
+                interval = evaluate_expr_bound(expr.fused % expr.fused.inner.range.end, fixed_axis)
         elif expr in fixed_axis:
             interval = Range.single_point(expr)
         else:
@@ -416,8 +434,22 @@ def evaluate_expr_bound(expr, fixed_axis):
                 interval = Range(left.start * right.start, (left.end - 1) * (right.end - 1) + 1)
             else:
                 interval = Range(left.start * right.start, left.end * right.end)
+        elif expr.type == Expr.DIV:
+            if left.is_single_point and right.is_single_point:
+                interval = Range.single_point(left.start // right.start)
+            elif not left.is_single_point and not right.is_single_point:
+                interval = Range(left.start // right.start, (left.end - 1) // (right.end - 1) + 1)
+            else:
+                interval = Range(left.start // right.start, left.end // right.end)
+        elif expr.type == Expr.MOD:
+            if left.is_single_point and right.is_single_point:
+                interval = Range.single_point(left.start % right.start)
+            elif not left.is_single_point and right.is_single_point:
+                interval = Range(left.start % right.start, left.end % right.end)
+            else:
+                raise ValueError("Should not be here.")
         else:
-            raise ValueError("Unsupported type.")
+            raise ValueError("Unsupported type {}.".format(expr.type))
     else:
         interval = Range.single_point(expr)
     return interval
@@ -436,9 +468,10 @@ if __name__ == "__main__":
     C = compute((m, ), lambda i: 3 + B[i], name = "C")
     # schedule
     outer, inner = split(C, C.axis[0], 32)
-    # fused = fuse(C, (outer, inner))
     # reorder(C, (inner, outer))
-    compute_at(B, C, outer)
+    fused = fuse(C, (outer, inner))
+    # reorder(C, (inner, outer))
+    compute_at(B, C, fused)
 
     # lower
     print(lower(C))
