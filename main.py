@@ -7,7 +7,11 @@ class Expr:
     DIV = 2
     SUB = 3
     MOD = 4
-    mapping = ["+", "*", "//", "-", "%"]
+    GT = 5
+    GE = 6
+    LT = 7
+    LE = 8
+    mapping = ["+", "*", "//", "-", "%", ">", ">=", "<", "<="]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -64,6 +68,35 @@ class Expr:
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val % other.val)
         return BinaryExpr(self, other, Expr.MOD)
+
+    def __gt__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(int(self.val > other.val))
+        return BinaryExpr(self, other, Expr.GT)
+    
+    def __ge__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(int(self.val >= other.val))
+        return BinaryExpr(self, other, Expr.GE)
+    
+    def __lt__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(int(self.val < other.val))
+        return BinaryExpr(self, other, Expr.LT)
+
+    def __le__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(int(self.val <= other.val))
+        return BinaryExpr(self, other, Expr.LE)
+     
     __radd__ = __add__
     __rmul__ = __mul__
 
@@ -134,7 +167,7 @@ class IterVar(Expr):
         self.type = IterVar.NORMAL
 
     def __str__(self):
-        return "{0}: [{1}, {2})".format(self.name, self.range.start, self.range.end)
+        return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == RangeType.CLOSED_CLOSED else ")")
 
     def CUDA_codegen(self):
         if self.type == IterVar.SPLIT:
@@ -149,6 +182,19 @@ class IterVar(Expr):
                 return self.range.start.CUDA_codegen()
             else:
                 return self.name
+
+class IfThenElseExpr(Expr):
+    def __init__(self, condition, then_expr, else_expr):
+        super().__init__()
+        self.condition = condition
+        self.then_expr = then_expr
+        self.else_expr = else_expr
+
+    def __str__(self):
+        return "{} {} {}".format(str(self.condition), str(self.then_expr), str(self.else_expr))
+    
+    def CUDA_codegen(self):
+        return "if ({0}) {{\n{1}}}\n{{\n{2}}}\n".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -189,10 +235,12 @@ class TensorExpr(Expr):
             self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i], 0, v) for i, v in enumerate(self.shape)])
             self.root_axis = self.axis
             self.index = self.axis
-            self.expr = compute_func(self.axis)
+            self.expr = compute_func(*self.axis)
             self.inputs = collect_inputs(self.expr)
 
     def __getitem__(self, index):
+        if not isinstance(index, tuple):
+            index = (index, )
         tensor_slice = TensorSliceExpr(self, index)
         self.consumers.append(tensor_slice)
         return tensor_slice
@@ -211,10 +259,7 @@ class TensorExpr(Expr):
         scope = indent
         # compose loop
         for i, axis in enumerate(self.axis):
-            if axis.range.is_single_point:
-                # opening += "    " * scope + "int {0} = {1};\n".format(axis.name, axis.range.start.CUDA_codegen())
-                pass
-            else:
+            if not axis.range.is_single_point:
                 opening += "    " * scope + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
                     axis.name, 
                     axis.range.start.CUDA_codegen(),
@@ -454,6 +499,8 @@ def evaluate_expr_bound(expr, fixed_axis):
         interval = Range.single_point(expr)
     return interval
 
+def if_then_else(condition, then_expr, else_expr):
+    return IfThenElseExpr(condition, then_expr, else_expr)
 
 def lower(tensor):
     infer_bound_pass(tensor)
