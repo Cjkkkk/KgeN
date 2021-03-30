@@ -16,28 +16,47 @@ class Expr:
             other = ConstExpr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val + other.val)
-        return BinaryExpr(self, other, Expr.ADD)
+        elif isinstance(self, ConstExpr) and self.val == 0:
+            return other
+        elif isinstance(other, ConstExpr) and other.val == 0:
+            return self
+        else:
+            return BinaryExpr(self, other, Expr.ADD)
+
+    def __sub__(self, other):
+        if isinstance(other, int):
+            other = ConstExpr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(self.val - other.val)
+        elif isinstance(other, ConstExpr) and other.val == 0:
+            raise self
+        else:
+            return BinaryExpr(self, other, Expr.SUB)
 
     def __mul__(self, other):
         if isinstance(other, int):
             other = ConstExpr(other)
+        # folding
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val * other.val)
-        return BinaryExpr(self, other, Expr.MUL)
+        elif isinstance(self, ConstExpr) and self.val == 0:
+            return ConstExpr(0)
+        elif isinstance(other, ConstExpr) and other.val == 0:
+            return ConstExpr(0)
+        else:
+            return BinaryExpr(self, other, Expr.MUL)
 
     def __floordiv__(self, other):
         if isinstance(other, int):
             other = ConstExpr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val // other.val)
-        return BinaryExpr(self, other, Expr.DIV)
-    
-    def __sub__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
-        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
-            return ConstExpr(self.val - other.val)
-        return BinaryExpr(self, other, Expr.SUB)
+        elif isinstance(self, ConstExpr) and self.val == 0:
+            return ConstExpr(0)
+        elif isinstance(other, ConstExpr) and other.val == 0:
+            raise ValueError("Expr divided by 0.")
+        else:
+            return BinaryExpr(self, other, Expr.DIV)
 
     def __mod__(self, other):
         if isinstance(other, int):
@@ -86,20 +105,31 @@ class ConstExpr(Expr):
     def CUDA_codegen(self):
         return str(self.val)
 
+class RangeType:
+    CLOSED_OPEN = 0
+    CLOSED_CLOSED = 1
+
 class Range:
-    def __init__(self, start, end, stride=1):
+    def __init__(self, start, end, type_= RangeType.CLOSED_OPEN):
         self.start = ConstExpr(start) if isinstance(start, int) else start
         self.end = ConstExpr(end) if isinstance(end, int) else end
-        self.stride = ConstExpr(stride) if isinstance(stride, int) else stride
+        self.is_single_point = False
+        self.type = type_
+
+    @staticmethod
+    def single_point(expr):
+        interval = Range(expr, expr, RangeType.CLOSED_CLOSED)
+        interval.is_single_point = True
+        return interval
 
 class IterVar(Expr):
     NORMAL = 0
     SPLIT = 1
     FUSE = 2
-    def __init__(self, name, start, end, stride=1):
+    def __init__(self, name, start, end):
         super().__init__()
         self.name = name
-        self.range = Range(start, end, stride)
+        self.range = Range(start, end)
         self.attached_computation = []
         self.type = IterVar.NORMAL
 
@@ -181,7 +211,7 @@ class TensorExpr(Expr):
                 axis.name, 
                 axis.range.start.CUDA_codegen(),
                 axis.range.end.CUDA_codegen(),
-                axis.range.stride.CUDA_codegen())
+                1)
             
             for computation in axis.attached_computation:
                 opening += computation.CUDA_codegen(i + 1)
@@ -363,22 +393,33 @@ def evaluate_expr_bound(expr, fixed_axis):
         if expr.type == IterVar.SPLIT:
             interval = evaluate_expr_bound(expr.outer * expr.inner.range.end + expr.inner, fixed_axis)
         elif expr in fixed_axis:
-            interval = Range(expr, expr + 1)
+            interval = Range.single_point(expr)
         else:
             interval = Range(expr.range.start, expr.range.end)
     elif isinstance(expr, BinaryExpr):
         left = evaluate_expr_bound(expr.left, fixed_axis)
         right = evaluate_expr_bound(expr.right, fixed_axis)
         if expr.type == Expr.ADD:
-            interval = Range(left.start + right.start, left.end + right.end)
+            if left.is_single_point and right.is_single_point:
+                interval = Range.single_point(left.start + right.start)
+            else:
+                interval = Range(left.start + right.start, left.end + right.end)
         elif expr.type == Expr.SUB:
-            interval = Range(left.start - right.start, left.end - right.end)
+            if left.is_single_point and right.is_single_point:
+                interval = Range.single_point(left.start - right.start)
+            else:
+                interval = Range(left.start - right.start, left.end - right.end)
         elif expr.type == Expr.MUL:
-            interval = Range(left.start * right.start, (left.end - 1) * (right.end - 1))
+            if left.is_single_point and right.is_single_point:
+                interval = Range.single_point(left.start * right.start)
+            elif not left.is_single_point and not right.is_single_point:
+                interval = Range(left.start * right.start, (left.end - 1) * (right.end - 1) + 1)
+            else:
+                interval = Range(left.start * right.start, left.end * right.end)
         else:
             raise ValueError("Unsupported type.")
     else:
-        interval = Range(expr, expr + 1)
+        interval = Range.single_point(expr)
     return interval
 
 
