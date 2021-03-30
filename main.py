@@ -241,7 +241,6 @@ class TensorExpr(Expr):
         if tensor_type == TensorExpr.COMPUTE:
             self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i], 0, v) for i, v in enumerate(self.shape)])
             self.root_axis = self.axis
-            self.index = self.axis
             self.expr = compute_func(*self.axis)
             self.inputs = collect_inputs(self.expr)
 
@@ -278,7 +277,7 @@ class TensorExpr(Expr):
             for computation in axis.attached_computation:
                 opening += computation.CUDA_codegen(scope)
             
-        body = "    " * scope + TensorSliceExpr(self, self.index).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
+        body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
         return opening + body + closing
 
 def var(name):
