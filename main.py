@@ -505,6 +505,7 @@ def evaluate_expr_bound(expr, fixed_axis):
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     else:
+        # TODO: fix ifThenElseExpr and TensorSliceExpr
         interval = Range.single_point(expr)
     return interval
 
