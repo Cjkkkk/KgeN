@@ -11,7 +11,9 @@ class Expr:
     GE = 6
     LT = 7
     LE = 8
-    mapping = ["+", "*", "//", "-", "%", ">", ">=", "<", "<="]
+    MIN = 9
+    MAX = 10
+    mapping = ["+", "*", "//", "-", "%", ">", ">=", "<", "<=", "min", "max"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -100,6 +102,28 @@ class Expr:
     __radd__ = __add__
     __rmul__ = __mul__
 
+    @staticmethod
+    def min(a, b):
+        if isinstance(a, int):
+            a = ConstExpr(a)
+        if isinstance(b, int):
+            b = ConstExpr(b)
+        if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
+            return ConstExpr(min(a.val, b.val))
+        else:
+            return BinaryExpr(a, b, Expr.MIN)
+    
+    @staticmethod
+    def max(a, b):
+        if isinstance(a, int):
+            a = ConstExpr(a)
+        if isinstance(b, int):
+            b = ConstExpr(b)
+        if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
+            return ConstExpr(max(a.val, b.val))
+        else:
+            return BinaryExpr(a, b, Expr.MAX)
+
     def CUDA_codegen(self):
         raise NotImplementedError
 
@@ -111,9 +135,13 @@ class BinaryExpr(Expr):
         self.type = type
 
     def __str__(self):
+        if self.type > 8: # min, max
+            return "({1}({0}, {2}))".format(self.left, Expr.mapping[self.type], self.right)
         return "({0} {1} {2})".format(self.left, Expr.mapping[self.type], self.right)
 
     def CUDA_codegen(self):
+        if self.type > 8: # min, max
+            return "({1}({0}, {2}))".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
         return "({0} {1} {2})".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
 
 class VarExpr(Expr):
@@ -387,18 +415,20 @@ def infer_root_iter_bound(tensor, rmap):
             bounds = None
             for consumer in tensor.consumers:
                 new_bounds = [evaluate_expr_bound(index, tensor.fixed_axis) for index in consumer.index]
-            if bounds is None:
-                bounds =  new_bounds
-            else:
-                # TODO: consolidate bounds
-                # for i, bound in enumerate(new_bounds):
-                #     bounds[i] = range(min(), max(), 1)
-                pass
+                if bounds is None:
+                    bounds = new_bounds
+                else:
+                    # TODO: Test consolidate bounds
+                    for i, new_bound in enumerate(new_bounds):
+                        bounds[i] = Range(
+                                Expr.min(bounds[i].start, new_bound.start), 
+                                Expr.max(bounds[i].end, new_bound.end)
+                            )
             for i, root_axis in enumerate(tensor.root_axis):
                 root_axis.range = bounds[i]
                 rmap[root_axis] = bounds[i]
         else:
-            # is output tensor, therefor no consumers
+            # is output tensor, therefore no consumers
             for root_axis in tensor.root_axis:
                 rmap[root_axis] = root_axis.range
 
@@ -485,14 +515,16 @@ def evaluate_expr_bound(expr, fixed_axis):
             if left.is_single_point and right.is_single_point:
                 interval = Range.single_point(left.start * right.start)
             elif not left.is_single_point and not right.is_single_point:
-                interval = Range(left.start * right.start, (left.end - 1) * (right.end - 1) + 1)
+                interval = Range(left.start * right.start, (left.end - 1) * (right.end - 1))
+            elif left.is_single_point and not right.is_single_point:
+                interval = Range(left.start * right.start, left.end * (right.end - 1))
             else:
-                interval = Range(left.start * right.start, left.end * right.end)
+                interval = Range(left.start * right.start, (left.end -1 ) * right.end)
         elif expr.type == Expr.DIV:
             if left.is_single_point and right.is_single_point:
                 interval = Range.single_point(left.start // right.start)
             elif not left.is_single_point and not right.is_single_point:
-                interval = Range(left.start // right.start, (left.end - 1) // (right.end - 1) + 1)
+                interval = Range(left.start // right.start, (left.end - 1) // (right.end - 1))
             else:
                 interval = Range(left.start // right.start, left.end // right.end)
         elif expr.type == Expr.MOD:
@@ -522,13 +554,13 @@ if __name__ == "__main__":
     m = 128
     A = placeholder((m, ), name = "A")
     B = compute((m, ), lambda i: 2 + A[i], name = "B")
-    C = compute((m, ), lambda i: 3 + B[i], name = "C")
+    C = compute((m, ), lambda i: 3 + B[i] + B[i-1] + B[i+1], name = "C")
     # schedule
     outer, inner = split(C, C.axis[0], 32)
     # reorder(C, (inner, outer))
-    fused = fuse(C, (outer, inner))
+    # fused = fuse(C, (outer, inner))
     # reorder(C, (inner, outer))
-    compute_at(B, C, fused)
+    # compute_at(B, C, fused)
 
     # lower
     print(lower(C))
