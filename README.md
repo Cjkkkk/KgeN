@@ -1,6 +1,13 @@
 # KgeN
 A TVM-like CUDA code generator.
 
+# Component
+* Expression IR
+* Compute primitives
+* Schedule primitives
+* Infer bound pass
+* Cuda codegen pass
+
 # TODO
 * consolidate ranges (done)
 * if_then_else expression

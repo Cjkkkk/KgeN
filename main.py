@@ -1,6 +1,6 @@
 import math
 
-
+# Expr IR
 class Expr:
     ADD = 0
     MUL = 1
@@ -308,6 +308,8 @@ class TensorExpr(Expr):
         body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
         return opening + body + closing
 
+
+# compute primitives
 def var(name):
     return VarExpr(name)
 
@@ -332,15 +334,21 @@ def compute(shape, function, name):
     tensor = TensorExpr(shape, name, TensorExpr.COMPUTE, function)
     return tensor
 
+def if_then_else(condition, then_expr, else_expr):
+    return IfThenElseExpr(condition, then_expr, else_expr)
 
+# schedule primitives
 def bind(tensor, ax, name):
+    if name not in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+        raise ValueError("illegal binding name {}".format(name))
     ax.bind_type = IterVar.BIND
-    ax.bind_name = name
+    ax.name = name
 
 def split(tensor, ax, factor):
-    new_axis = []
     if not isinstance(tensor, TensorExpr):
         raise ValueError("Expect TensorExpr not {0}".format(type(tensor)))
+    
+    new_axis = []
     for axis in tensor.axis:
         if ax is axis:
             outer = IterVar(axis.name + "_outer", math.inf, math.inf)
@@ -395,7 +403,7 @@ def compute_at(producer, consumer, axis):
     producer.fixed_axis = tuple(fixed_axis)
     axis.attached_computation.append(producer)
 
-
+# bound inference and codegen
 def topo_sort(tensor):
     res = [tensor]
     q = [tensor]
@@ -475,16 +483,6 @@ def infer_bound_pass(tensor):
         infer_root_iter_bound(tensor, rmap)
         pass_down(tensor, rmap)
 
-
-def CUDA_codegen_pass(tensor):
-    tensors = topo_sort(tensor)
-    res = ""
-    for t in reversed(tensors):
-        # skip codegen if it is attached to some axis
-        if not t.attached:
-            res += t.CUDA_codegen()
-    return res
-
 def evaluate_expr_bound(expr, fixed_axis):
     if isinstance(expr, IterVar):
         if expr.type == IterVar.SPLIT:
@@ -541,8 +539,14 @@ def evaluate_expr_bound(expr, fixed_axis):
         interval = Range.single_point(expr)
     return interval
 
-def if_then_else(condition, then_expr, else_expr):
-    return IfThenElseExpr(condition, then_expr, else_expr)
+def CUDA_codegen_pass(tensor):
+    tensors = topo_sort(tensor)
+    res = ""
+    for t in reversed(tensors):
+        # skip codegen if it is attached to some axis
+        if not t.attached:
+            res += t.CUDA_codegen()
+    return res
 
 def lower(tensor):
     infer_bound_pass(tensor)
