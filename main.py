@@ -350,6 +350,13 @@ def collect_inputs(producer):
         if isinstance(expr, BinaryExpr):
             for subexpr in expr.subexprs:
                 q.append(subexpr)
+        if isinstance(expr, IfThenElseExpr):
+            q.append(expr.condition)
+            q.append(expr.then_expr)
+            q.append(expr.else_expr)
+        if isinstance(expr, ReduceExpr):
+            # TODO: fix this
+            pass
     return list(inputs)
 
 def compute(shape, function, name):
@@ -361,13 +368,19 @@ def if_then_else(condition, then_expr, else_expr):
 
 
 def reduce_sum(expr, axis):
-    return ReduceExpr(lambda x, y: x + y, ConstExpr(0), expr, axis)
+    combinator = lambda x, y: x + y
+    init = ConstExpr(0)
+    return ReduceExpr(combinator, init, expr, axis)
 
 def reduce_max(expr, axis):
-    return ReduceExpr(lambda x, y: Expr.max(x, y), ConstExpr(- math.inf), expr, axis)
+    combinator = lambda x, y: Expr.max(x, y)
+    init = ConstExpr(-math.inf)
+    return ReduceExpr(combinator, init, expr, axis)
 
 def reduce_min(expr, axis):
-    return ReduceExpr(lambda x, y: Expr.max(x, y), ConstExpr(math.inf), expr, axis)
+    combinator = lambda x, y: Expr.min(x, y)
+    init = ConstExpr(math.inf)
+    return ReduceExpr(combinator, init, expr, axis)
 
 # schedule primitives
 def bind(tensor, ax, name):
@@ -395,6 +408,11 @@ def split(tensor, ax, factor):
             new_axis.append(axis)
     tensor.axis = tuple(new_axis)
     return outer, inner
+
+def tile(tensor, ax1, ax2, factor1, factor2):
+    ax1_outer, ax1_inner = split(tensor, ax1, factor1)
+    ax2_outer, ax2_inner = split(tensor, ax2, factor2)
+    return ax1_outer, ax1_inner, ax2_outer, ax2_inner
 
 def reorder(tensor, axis_tuple):
     if len(axis_tuple) != len(tensor.axis):
