@@ -13,6 +13,7 @@ class Expr:
     LE = 8
     MIN = 9
     MAX = 10
+
     mapping = ["+", "*", "//", "-", "%", ">", ">=", "<", "<=", "min", "max"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
@@ -187,6 +188,7 @@ class IterVar(Expr):
     NORMAL = 0
     SPLIT = 1
     FUSE = 2
+    REDUCE = 3
 
     NONE = 3
     BIND = 4
@@ -218,6 +220,25 @@ class IterVar(Expr):
             else:
                 return self.name
 
+def reduce_axis(end, name):
+    axis = IterVar(name, 0, end)
+    axis.type = IterVar.REDUCE
+    return axis
+
+class ReduceExpr(Expr):
+    def __init__(self, combinator, init, expr, axis):
+        super().__init__()
+        self.combinator = combinator
+        self.init = init
+        self.reduce_axis = axis
+    
+    def __str__(self):
+        pass
+
+    def CUDA_codegen(self):
+        # TODO: fix this
+        pass
+ 
 class IfThenElseExpr(Expr):
     def __init__(self, condition, then_expr, else_expr):
         super().__init__()
@@ -229,6 +250,7 @@ class IfThenElseExpr(Expr):
         return "{} {} {}".format(str(self.condition), str(self.then_expr), str(self.else_expr))
     
     def CUDA_codegen(self):
+        # TODO: fix this
         return "if ({0}) {{\n{1}}}\n{{\n{2}}}\n".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
 
 class TensorSliceExpr(Expr):
@@ -336,6 +358,16 @@ def compute(shape, function, name):
 
 def if_then_else(condition, then_expr, else_expr):
     return IfThenElseExpr(condition, then_expr, else_expr)
+
+
+def reduce_sum(expr, axis):
+    return ReduceExpr(lambda x, y: x + y, ConstExpr(0), expr, axis)
+
+def reduce_max(expr, axis):
+    return ReduceExpr(lambda x, y: Expr.max(x, y), ConstExpr(- math.inf), expr, axis)
+
+def reduce_min(expr, axis):
+    return ReduceExpr(lambda x, y: Expr.max(x, y), ConstExpr(math.inf), expr, axis)
 
 # schedule primitives
 def bind(tensor, ax, name):
