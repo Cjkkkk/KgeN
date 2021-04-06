@@ -15,4 +15,4 @@ A TVM-like CUDA code generator.
 * bind to thread (done)
 * fix eval_expr_bound with opening and closing corner case
 * add expr comparison for min max expr
-* add codegen for reduce and if_then_else expr (done)
+* add codegen for reduce and if_then_else expr

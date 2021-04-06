@@ -323,6 +323,7 @@ class TensorExpr(Expr):
                 opening += computation.CUDA_codegen(scope)
         
         if isinstance(self.expr, ReduceExpr):
+            # TODO: fix init expr codegen
             expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr).CUDA_codegen()
         else:
             expr = self.expr.CUDA_codegen()
