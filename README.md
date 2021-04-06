@@ -10,9 +10,9 @@ A TVM-like CUDA code generator.
 
 # TODO
 * consolidate ranges (done)
-* if_then_else expression
-* reduce expression
+* if_then_else expression (done)
+* reduce expression (done)
 * bind to thread (done)
 * fix eval_expr_bound with opening and closing corner case
 * add expr comparison for min max expr
-* add codegen for reduce and if_then_else expr
+* add codegen for reduce and if_then_else expr (done)

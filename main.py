@@ -1,5 +1,11 @@
 import math
 
+def convert_to_int(v):
+    if isinstance(v, int):
+        return ConstExpr(v)
+    else:
+        return v
+
 # Expr IR
 class Expr:
     ADD = 0
@@ -19,8 +25,7 @@ class Expr:
         self.subexprs = subexprs
 
     def __add__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val + other.val)
         elif isinstance(self, ConstExpr) and self.val == 0:
@@ -31,8 +36,7 @@ class Expr:
             return BinaryExpr(self, other, Expr.ADD)
 
     def __sub__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val - other.val)
         elif isinstance(other, ConstExpr) and other.val == 0:
@@ -41,8 +45,7 @@ class Expr:
             return BinaryExpr(self, other, Expr.SUB)
 
     def __mul__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         # folding
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val * other.val)
@@ -54,8 +57,7 @@ class Expr:
             return BinaryExpr(self, other, Expr.MUL)
 
     def __floordiv__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val // other.val)
         elif isinstance(self, ConstExpr) and self.val == 0:
@@ -66,36 +68,31 @@ class Expr:
             return BinaryExpr(self, other, Expr.DIV)
 
     def __mod__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val % other.val)
         return BinaryExpr(self, other, Expr.MOD)
 
     def __gt__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val > other.val))
         return BinaryExpr(self, other, Expr.GT)
     
     def __ge__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val >= other.val))
         return BinaryExpr(self, other, Expr.GE)
     
     def __lt__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val < other.val))
         return BinaryExpr(self, other, Expr.LT)
 
     def __le__(self, other):
-        if isinstance(other, int):
-            other = ConstExpr(other)
+        other = convert_to_int(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val <= other.val))
         return BinaryExpr(self, other, Expr.LE)
@@ -105,10 +102,8 @@ class Expr:
 
     @staticmethod
     def min(a, b):
-        if isinstance(a, int):
-            a = ConstExpr(a)
-        if isinstance(b, int):
-            b = ConstExpr(b)
+        a = convert_to_int(a)
+        b = convert_to_int(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
             return ConstExpr(min(a.val, b.val))
         else:
@@ -116,10 +111,8 @@ class Expr:
     
     @staticmethod
     def max(a, b):
-        if isinstance(a, int):
-            a = ConstExpr(a)
-        if isinstance(b, int):
-            b = ConstExpr(b)
+        a = convert_to_int(a)
+        b = convert_to_int(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
             return ConstExpr(max(a.val, b.val))
         else:
@@ -173,8 +166,8 @@ class RangeType:
 
 class Range:
     def __init__(self, start, end, type_= RangeType.CLOSED_OPEN):
-        self.start = ConstExpr(start) if isinstance(start, int) else start
-        self.end = ConstExpr(end) if isinstance(end, int) else end
+        self.start = convert_to_int(start)
+        self.end = convert_to_int(end)
         self.is_single_point = False
         self.type = type_
 
@@ -228,30 +221,29 @@ def reduce_axis(end, name):
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):
         super().__init__()
-        self.combinator = combinator
-        self.init = init
-        self.reduce_axis = axis
+        self.combinator = convert_to_int(combinator)
+        self.init = convert_to_int(init)
+        self.expr = convert_to_int(expr)
+        self.reduce_axis = axis if isinstance(axis, tuple) else (axis, )
     
     def __str__(self):
-        pass
+        raise NotImplementedError
 
     def CUDA_codegen(self):
-        # TODO: fix this
-        pass
+        raise NotImplementedError
  
 class IfThenElseExpr(Expr):
     def __init__(self, condition, then_expr, else_expr):
         super().__init__()
-        self.condition = condition
-        self.then_expr = then_expr
-        self.else_expr = else_expr
+        self.condition = convert_to_int(condition)
+        self.then_expr = convert_to_int(then_expr)
+        self.else_expr = convert_to_int(else_expr)
 
     def __str__(self):
-        return "{} {} {}".format(str(self.condition), str(self.then_expr), str(self.else_expr))
+        return "({0} ? {1} : {2})".format(str(self.condition), str(self.then_expr), str(self.else_expr))
     
     def CUDA_codegen(self):
-        # TODO: fix this
-        return "if ({0}) {{\n{1}}}\n{{\n{2}}}\n".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
+        return "({0} ? {1} : {2})".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -294,6 +286,9 @@ class TensorExpr(Expr):
             self.expr = compute_func(*self.axis)
             self.inputs = collect_inputs(self.expr)
 
+            if isinstance(self.expr, ReduceExpr):
+                self.axis = tuple(self.axis + self.expr.reduce_axis)
+
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
@@ -326,8 +321,13 @@ class TensorExpr(Expr):
             
             for computation in axis.attached_computation:
                 opening += computation.CUDA_codegen(scope)
-            
-        body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
+        
+        if isinstance(self.expr, ReduceExpr):
+            expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr).CUDA_codegen()
+        else:
+            expr = self.expr.CUDA_codegen()
+        
+        body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + expr + ";\n"
         return opening + body + closing
 
 
@@ -355,8 +355,7 @@ def collect_inputs(producer):
             q.append(expr.then_expr)
             q.append(expr.else_expr)
         if isinstance(expr, ReduceExpr):
-            # TODO: fix this
-            pass
+            q.append(expr.expr)
     return list(inputs)
 
 def compute(shape, function, name):
@@ -365,22 +364,18 @@ def compute(shape, function, name):
 
 def if_then_else(condition, then_expr, else_expr):
     return IfThenElseExpr(condition, then_expr, else_expr)
-
-
+   
 def reduce_sum(expr, axis):
     combinator = lambda x, y: x + y
-    init = ConstExpr(0)
-    return ReduceExpr(combinator, init, expr, axis)
+    return ReduceExpr(combinator, 0, expr, axis)
 
 def reduce_max(expr, axis):
     combinator = lambda x, y: Expr.max(x, y)
-    init = ConstExpr(-math.inf)
-    return ReduceExpr(combinator, init, expr, axis)
+    return ReduceExpr(combinator, -math.inf, expr, axis)
 
 def reduce_min(expr, axis):
     combinator = lambda x, y: Expr.min(x, y)
-    init = ConstExpr(math.inf)
-    return ReduceExpr(combinator, init, expr, axis)
+    return ReduceExpr(combinator, math.inf, expr, axis)
 
 # schedule primitives
 def bind(tensor, ax, name):
@@ -608,13 +603,16 @@ if __name__ == "__main__":
     m = 128
     A = placeholder((m, ), name = "A")
     B = compute((m, ), lambda i: 2 + A[i], name = "B")
-    C = compute((m, ), lambda i: 3 + B[i] + B[i-1] + B[i+1], name = "C")
+
+    k = reduce_axis(128, name="k")
+    # C = compute((m, ), lambda i: 3 + B[i] + B[i-1] + B[i+1] + if_then_else( i > 10, 5, A[i]), name = "C")
+    C = compute((m, ), lambda i: reduce_sum(A[k] * B[k], axis=k), name = "C")
     # schedule
     outer, inner = split(C, C.axis[0], 32)
     # reorder(C, (inner, outer))
     # fused = fuse(C, (outer, inner))
     # reorder(C, (inner, outer))
     # compute_at(B, C, fused)
-
+    
     # lower
     print(lower(C))
