@@ -321,6 +321,7 @@ class TensorExpr(Expr):
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
+        index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         self.consumers.append(tensor_slice)
         return tensor_slice
