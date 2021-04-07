@@ -309,6 +309,7 @@ class TensorExpr(Expr):
         opening = ""
         closing = ""
         scope = indent
+        # TODO: find out which axis to do reduce init
         # compose loop
         for i, axis in enumerate(self.axis):
             if not axis.range.is_single_point and not axis.bind_type == IterVar.BIND:
