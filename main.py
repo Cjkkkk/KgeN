@@ -435,9 +435,16 @@ def tile(tensor, ax1, ax2, factor1, factor2):
     return ax1_outer, ax1_inner, ax2_outer, ax2_inner
 
 def reorder(tensor, axis_tuple):
-    if len(axis_tuple) != len(tensor.axis):
-        raise ValueError("should provide {0} axis".format(len(axis_tuple)))
-    tensor.axis = tuple(axis_tuple)
+    new_axis_list = []
+    cur = 0
+    axis_set = {*axis_tuple}
+    for axis in tensor.axis:
+        if axis in axis_set:
+            new_axis_list.append(axis_tuple[cur])
+            cur += 1
+        else:
+            new_axis_list.append(axis)
+    tensor.axis = tuple(new_axis_list)
 
 def fuse(tensor, axis_tuple):
     new_axis = []
@@ -634,6 +641,7 @@ def evaluate_expr_bound(expr, fixed_axis):
     elif isinstance(expr, ConstExpr) or isinstance(expr, VarExpr):
         interval = Range.single_point(expr)
     else:
+        print(expr)
         raise ValueError("Unsupported expr type {}".format(type(expr)))
     return interval
 
@@ -649,22 +657,3 @@ def CUDA_codegen_pass(tensor):
 def lower(tensor):
     infer_bound_pass(tensor)
     return CUDA_codegen_pass(tensor)
-
-if __name__ == "__main__":
-    # definition
-    # m = var("m")
-    m = 128
-    A = placeholder((m, ), name = "A")
-    B = compute((m, ), lambda i: 2 + A[i], name = "B")
-    k = reduce_axis(128, name="k")
-    # C = compute((m, ), lambda i: 3 + B[i] + B[i-1] + B[i+1] + if_then_else( i > 10, 5, A[i]), name = "C")
-    C = compute((m, ), lambda i: reduce_sum(A[k] * B[k], axis=k), name = "C")
-    # schedule
-    outer, inner = split(C, C.axis[0], 32)
-    # reorder(C, (inner, outer))
-    # fused = fuse(C, (outer, inner))
-    # reorder(C, (inner, outer))
-    # compute_at(B, C, fused)
-    
-    # lower
-    print(lower(C))
