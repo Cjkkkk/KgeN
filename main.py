@@ -311,7 +311,7 @@ class TensorExpr(Expr):
         if tensor_type == TensorExpr.COMPUTE:
             self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i], 0, v) for i, v in enumerate(self.shape)])
             self.root_axis = self.axis
-            self.expr = compute_func(*self.axis)
+            self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
             self.inputs = collect_inputs(self.expr)
 
             if isinstance(self.expr, ReduceExpr):
