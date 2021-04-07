@@ -1,7 +1,7 @@
 import sys
 sys.path.append("..")
 
-import main as KgeN
+import KgeN
 
 M = 128
 
