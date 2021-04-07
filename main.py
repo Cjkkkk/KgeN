@@ -1,7 +1,7 @@
 import math
 
-def convert_to_int(v):
-    if isinstance(v, int):
+def wrap_number_as_const_expr(v):
+    if isinstance(v, int) or isinstance(v, float):
         return ConstExpr(v)
     else:
         return v
@@ -10,22 +10,23 @@ def convert_to_int(v):
 class Expr:
     ADD = 0
     MUL = 1
-    DIV = 2
-    SUB = 3
-    MOD = 4
-    GT = 5
-    GE = 6
-    LT = 7
-    LE = 8
-    MIN = 9
-    MAX = 10
+    TRUE_DIV = 2
+    FLOOR_DIV = 3
+    SUB = 4
+    MOD = 5
+    GT = 6
+    GE = 7
+    LT = 8
+    LE = 9
+    MIN = 10
+    MAX = 11
 
-    mapping = ["+", "*", "//", "-", "%", ">", ">=", "<", "<=", "min", "max"]
+    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
     def __add__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val + other.val)
         elif isinstance(self, ConstExpr) and self.val == 0:
@@ -36,7 +37,7 @@ class Expr:
             return BinaryExpr(self, other, Expr.ADD)
 
     def __sub__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val - other.val)
         elif isinstance(other, ConstExpr) and other.val == 0:
@@ -45,7 +46,7 @@ class Expr:
             return BinaryExpr(self, other, Expr.SUB)
 
     def __mul__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         # folding
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val * other.val)
@@ -56,8 +57,19 @@ class Expr:
         else:
             return BinaryExpr(self, other, Expr.MUL)
 
+    def __truediv__(self, other):
+        other = wrap_number_as_const_expr(other)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+            return ConstExpr(self.val / other.val)
+        elif isinstance(self, ConstExpr) and self.val == 0:
+            return ConstExpr(0)
+        elif isinstance(other, ConstExpr) and other.val == 0:
+            raise ValueError("Expr divided by 0.")
+        else:
+            return BinaryExpr(self, other, Expr.TRUE_DIV)
+
     def __floordiv__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val // other.val)
         elif isinstance(self, ConstExpr) and self.val == 0:
@@ -65,34 +77,34 @@ class Expr:
         elif isinstance(other, ConstExpr) and other.val == 0:
             raise ValueError("Expr divided by 0.")
         else:
-            return BinaryExpr(self, other, Expr.DIV)
+            return BinaryExpr(self, other, Expr.FLOOR_DIV)
 
     def __mod__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val % other.val)
         return BinaryExpr(self, other, Expr.MOD)
 
     def __gt__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val > other.val))
         return BinaryExpr(self, other, Expr.GT)
     
     def __ge__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val >= other.val))
         return BinaryExpr(self, other, Expr.GE)
     
     def __lt__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val < other.val))
         return BinaryExpr(self, other, Expr.LT)
 
     def __le__(self, other):
-        other = convert_to_int(other)
+        other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(int(self.val <= other.val))
         return BinaryExpr(self, other, Expr.LE)
@@ -102,19 +114,35 @@ class Expr:
 
     @staticmethod
     def min(a, b):
-        a = convert_to_int(a)
-        b = convert_to_int(b)
+        a = wrap_number_as_const_expr(a)
+        b = wrap_number_as_const_expr(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
             return ConstExpr(min(a.val, b.val))
+        elif isinstance(self, ConstExpr) and self.val == math.inf:
+            return other
+        elif isinstance(self, ConstExpr) and self.val == -math.inf:
+            return self
+        elif isinstance(other, ConstExpr) and other.val == math.inf:
+            return self
+        elif isinstance(other, ConstExpr) and other.val == -math.inf:
+            return other
         else:
             return BinaryExpr(a, b, Expr.MIN)
     
     @staticmethod
     def max(a, b):
-        a = convert_to_int(a)
-        b = convert_to_int(b)
+        a = wrap_number_as_const_expr(a)
+        b = wrap_number_as_const_expr(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
             return ConstExpr(max(a.val, b.val))
+        elif isinstance(self, ConstExpr) and self.val == math.inf:
+            return self
+        elif isinstance(self, ConstExpr) and self.val == -math.inf:
+            return other
+        elif isinstance(other, ConstExpr) and other.val == math.inf:
+            return other
+        elif isinstance(other, ConstExpr) and other.val == -math.inf:
+            return self
         else:
             return BinaryExpr(a, b, Expr.MAX)
 
@@ -129,12 +157,12 @@ class BinaryExpr(Expr):
         self.type = type
 
     def __str__(self):
-        if self.type > 8: # min, max
+        if self.type > 9: # min, max
             return "({1}({0}, {2}))".format(self.left, Expr.mapping[self.type], self.right)
         return "({0} {1} {2})".format(self.left, Expr.mapping[self.type], self.right)
 
     def CUDA_codegen(self):
-        if self.type > 8: # min, max
+        if self.type > 9: # min, max
             return "({1}({0}, {2}))".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
         return "({0} {1} {2})".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
 
@@ -166,8 +194,8 @@ class RangeType:
 
 class Range:
     def __init__(self, start, end, type_= RangeType.CLOSED_OPEN):
-        self.start = convert_to_int(start)
-        self.end = convert_to_int(end)
+        self.start = wrap_number_as_const_expr(start)
+        self.end = wrap_number_as_const_expr(end)
         self.is_single_point = False
         self.type = type_
 
@@ -221,9 +249,9 @@ def reduce_axis(end, name):
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):
         super().__init__()
-        self.combinator = convert_to_int(combinator)
-        self.init = convert_to_int(init)
-        self.expr = convert_to_int(expr)
+        self.combinator = wrap_number_as_const_expr(combinator)
+        self.init = wrap_number_as_const_expr(init)
+        self.expr = wrap_number_as_const_expr(expr)
         self.reduce_axis = axis if isinstance(axis, tuple) else (axis, )
     
     def __str__(self):
@@ -235,9 +263,9 @@ class ReduceExpr(Expr):
 class IfThenElseExpr(Expr):
     def __init__(self, condition, then_expr, else_expr):
         super().__init__()
-        self.condition = convert_to_int(condition)
-        self.then_expr = convert_to_int(then_expr)
-        self.else_expr = convert_to_int(else_expr)
+        self.condition = wrap_number_as_const_expr(condition)
+        self.then_expr = wrap_number_as_const_expr(then_expr)
+        self.else_expr = wrap_number_as_const_expr(else_expr)
 
     def __str__(self):
         return "({0} ? {1} : {2})".format(str(self.condition), str(self.then_expr), str(self.else_expr))
@@ -388,8 +416,8 @@ def split(tensor, ax, factor):
     new_axis = []
     for axis in tensor.axis:
         if ax is axis:
-            outer = IterVar(axis.name + "_outer", math.inf, math.inf)
-            inner = IterVar(axis.name + "_inner", math.inf, math.inf)
+            outer = IterVar(axis.name + "_outer", -math.inf, math.inf)
+            inner = IterVar(axis.name + "_inner", -math.inf, math.inf)
             axis.outer = outer
             axis.inner = inner
             axis.factor = factor
@@ -414,7 +442,7 @@ def reorder(tensor, axis_tuple):
 def fuse(tensor, axis_tuple):
     new_axis = []
     # set axis to fuse
-    fused = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", math.inf, math.inf)
+    fused = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", -math.inf, math.inf)
     
     axis_tuple[0].type = IterVar.FUSE
     axis_tuple[1].type = IterVar.FUSE
@@ -517,6 +545,7 @@ def infer_root_iter_bound(tensor, rmap):
 def pass_down(tensor, rmap):
     for axis in rmap:
         if axis.type == IterVar.SPLIT:
+            # TODO: fix this: should be ceil div
             rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
             rmap[axis.inner] = Range(0, axis.factor)
             axis.outer.range = rmap[axis.outer]
@@ -557,6 +586,7 @@ def evaluate_expr_bound(expr, fixed_axis):
         else:
             interval = Range(expr.range.start, expr.range.end)
     elif isinstance(expr, BinaryExpr):
+        # TODO: fix corner cases
         left = evaluate_expr_bound(expr.left, fixed_axis)
         right = evaluate_expr_bound(expr.right, fixed_axis)
         if expr.type == Expr.ADD:
@@ -578,7 +608,7 @@ def evaluate_expr_bound(expr, fixed_axis):
                 interval = Range(left.start * right.start, left.end * (right.end - 1))
             else:
                 interval = Range(left.start * right.start, (left.end -1 ) * right.end)
-        elif expr.type == Expr.DIV:
+        elif expr.type == Expr.FLOOR_DIV:
             if left.is_single_point and right.is_single_point:
                 interval = Range.single_point(left.start // right.start)
             elif not left.is_single_point and not right.is_single_point:
@@ -594,9 +624,17 @@ def evaluate_expr_bound(expr, fixed_axis):
                 raise ValueError("Should not be here.")
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
-    else:
-        # TODO: fix ifThenElseExpr and TensorSliceExpr
+    elif isinstance(expr, IfThenElseExpr):
+        # TODO: fix ifThenElseExpr
+        then_interval = evaluate_expr_bound(expr.then_expr)
+        else_interval = evaluate_expr_bound(expr.else_expr)
+    elif isinstance(expr, TensorSliceExpr):
+        # TODO: fix TensorSliceExpr
+        pass
+    elif isinstance(expr, ConstExpr) or isinstance(expr, VarExpr):
         interval = Range.single_point(expr)
+    else:
+        raise ValueError("Unsupported expr type {}".format(type(expr)))
     return interval
 
 def CUDA_codegen_pass(tensor):
