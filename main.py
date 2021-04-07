@@ -288,12 +288,12 @@ class TensorExpr(Expr):
 
             if isinstance(self.expr, ReduceExpr):
                 self.axis = tuple(self.axis + self.expr.reduce_axis)
-
+                self.expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr)
+    
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
         tensor_slice = TensorSliceExpr(self, index)
-        # TODO: fix this: will add consumer when in codegen accidentally, should not be a problem
         self.consumers.append(tensor_slice)
         return tensor_slice
 
@@ -324,13 +324,7 @@ class TensorExpr(Expr):
             for computation in axis.attached_computation:
                 opening += computation.CUDA_codegen(scope)
         
-        if isinstance(self.expr, ReduceExpr):
-            # TODO: fix init expr codegen
-            expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr).CUDA_codegen()
-        else:
-            expr = self.expr.CUDA_codegen()
-        
-        body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + expr + ";\n"
+        body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
         return opening + body + closing
 
 
@@ -624,7 +618,6 @@ if __name__ == "__main__":
     m = 128
     A = placeholder((m, ), name = "A")
     B = compute((m, ), lambda i: 2 + A[i], name = "B")
-
     k = reduce_axis(128, name="k")
     # C = compute((m, ), lambda i: 3 + B[i] + B[i-1] + B[i+1] + if_then_else( i > 10, 5, A[i]), name = "C")
     C = compute((m, ), lambda i: reduce_sum(A[k] * B[k], axis=k), name = "C")
