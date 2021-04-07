@@ -293,6 +293,7 @@ class TensorExpr(Expr):
         if not isinstance(index, tuple):
             index = (index, )
         tensor_slice = TensorSliceExpr(self, index)
+        # TODO: fix this: will add consumer when in codegen accidentally, should not be a problem
         self.consumers.append(tensor_slice)
         return tensor_slice
 
@@ -450,84 +451,102 @@ def compute_at(producer, consumer, axis):
     axis.attached_computation.append(producer)
 
 # bound inference and codegen
-def topo_sort(tensor):
-    res = [tensor]
-    q = [tensor]
-    visited = {tensor}
-    while len(q) > 0:
-        t = q.pop()
-        for input_tensor in t.inputs:
-            if input_tensor not in visited:
-                visited.add(input_tensor)
-                res.append(input_tensor)
-                q.append(input_tensor)
+def topo_sort(iterable, get_output):
+    # Kahn's algorithm
+    # calculate indegree map
+    indegree_map = {}
+    for node in iterable:
+        indegree_map[node] = 0
+    nodes_list = [*iterable]
+    for node in nodes_list:
+        out_nodes = get_output(node)
+        for out_node in out_nodes:
+            nodes_list.append(out_node)
+            if out_node not in indegree_map:
+                indegree_map[out_node] = 1
+            else:
+                indegree_map[out_node] += 1
+    
+    # dequeue node with indegree == 0 into solutions
+    nodes_queue = [*iterable]
+    solutions = []
+    while len(nodes_queue) > 0:
+        node = nodes_queue.pop()
+        solutions.append(node)
+        out_nodes = get_output(node)
+        for out_node in out_nodes:
+            indegree_map[out_node] -= 1
+            if indegree_map[out_node] == 0:
+                nodes_queue.append(out_node)
+    return solutions
+
+def tensor_topo_sort(tensor):
+    def get_output(tensor):
+        return tensor.inputs
+    res = topo_sort([tensor], get_output)
+    return res
+
+def axis_topo_sort(axis_tuple):
+    def get_output(axis):
+        if axis.type == IterVar.SPLIT:
+            return [axis.outer, axis.inner]
+        elif axis.type == IterVar.FUSE:
+            return [axis.fused]
+        else:
+            return []
+    res = topo_sort(axis_tuple, get_output)
     return res
 
 def infer_root_iter_bound(tensor, rmap):
-    if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's axis
-        if len(tensor.consumers) > 0:
-            bounds = None
-            for consumer in tensor.consumers:
-                new_bounds = [evaluate_expr_bound(index, tensor.fixed_axis) for index in consumer.index]
-                if bounds is None:
-                    bounds = new_bounds
-                else:
-                    # TODO: Test consolidate bounds
-                    for i, new_bound in enumerate(new_bounds):
-                        bounds[i] = Range(
-                                Expr.min(bounds[i].start, new_bound.start), 
-                                Expr.max(bounds[i].end, new_bound.end)
-                            )
-            for i, root_axis in enumerate(tensor.root_axis):
-                root_axis.range = bounds[i]
-                rmap[root_axis] = bounds[i]
-        else:
-            # is output tensor, therefore no consumers
-            for root_axis in tensor.root_axis:
-                rmap[root_axis] = root_axis.range
+    if len(tensor.consumers) > 0:
+        bounds = None
+        for consumer in tensor.consumers:
+            new_bounds = [evaluate_expr_bound(index, tensor.fixed_axis) for index in consumer.index]
+            if bounds is None:
+                bounds = new_bounds
+            else:
+                # TODO: Test consolidate bounds
+                for i, new_bound in enumerate(new_bounds):
+                    bounds[i] = Range(
+                            Expr.min(bounds[i].start, new_bound.start), 
+                            Expr.max(bounds[i].end, new_bound.end)
+                        )
+        for i, root_axis in enumerate(tensor.root_axis):
+            root_axis.range = bounds[i]
+            rmap[root_axis] = bounds[i]
+    else:
+        # is output tensor, therefore no consumers
+        for root_axis in tensor.root_axis:
+            rmap[root_axis] = root_axis.range
 
 def pass_down(tensor, rmap):
-    if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's axis
-        for axis in rmap:
-            if axis.type == IterVar.SPLIT:
-                rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
-                rmap[axis.inner] = Range(0, axis.factor)
-                axis.outer.range = rmap[axis.outer]
-                axis.inner.range = rmap[axis.inner]
-            elif axis.type == IterVar.FUSE:
-                rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
-                axis.fused.range = rmap[axis.fused]
-            else:
-                # we already know root_axis's range
-                pass
+    for axis in rmap:
+        if axis.type == IterVar.SPLIT:
+            rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
+            rmap[axis.inner] = Range(0, axis.factor)
+            axis.outer.range = rmap[axis.outer]
+            axis.inner.range = rmap[axis.inner]
+        elif axis.type == IterVar.FUSE:
+            rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
+            axis.fused.range = rmap[axis.fused]
+        else:
+            # we already know root_axis's range
+            pass
 
 def get_rmap(tensor):
     rmap = {}
-    if tensor.type != TensorExpr.PLACEHOLDER:
-        for axis in tensor.root_axis:
-            rmap[axis] = axis.range
-
-    q = list(rmap.keys())
-    while len(q) > 0:
-        axis = q.pop()
-        if axis.type == IterVar.SPLIT:
-            rmap[axis.outer] = axis.outer.range
-            rmap[axis.inner] = axis.inner.range
-            q.append(axis.outer)
-            q.append(axis.inner)
-        elif axis.type == IterVar.FUSE:
-            rmap[axis.fused] = axis.fused.range
-            q.append(axis.fused)
-        else:
-            pass
+    axis_res = axis_topo_sort(tensor.root_axis)
+    for axis in axis_res:
+        rmap[axis] = axis.range
     return rmap
 
 def infer_bound_pass(tensor):
-    tensors = topo_sort(tensor)
+    tensors = tensor_topo_sort(tensor)
     for tensor in tensors:
-        rmap = get_rmap(tensor)
-        infer_root_iter_bound(tensor, rmap)
-        pass_down(tensor, rmap)
+        if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's bound
+            rmap = get_rmap(tensor)
+            infer_root_iter_bound(tensor, rmap)
+            pass_down(tensor, rmap)
 
 def evaluate_expr_bound(expr, fixed_axis):
     if isinstance(expr, IterVar):
@@ -586,7 +605,7 @@ def evaluate_expr_bound(expr, fixed_axis):
     return interval
 
 def CUDA_codegen_pass(tensor):
-    tensors = topo_sort(tensor)
+    tensors = tensor_topo_sort(tensor)
     res = ""
     for t in reversed(tensors):
         # skip codegen if it is attached to some axis
