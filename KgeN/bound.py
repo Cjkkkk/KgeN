@@ -55,7 +55,8 @@ def infer_root_iter_bound(tensor, rmap):
             rmap[axis] = Range.single_point(axis)
         
         if len(tensor.fixed_axis) > 0:
-            pass_up(tensor, rmap)
+            axis_tuple = axis_topo_sort(tensor.fixed_axis)
+            pass_up(rmap, reversed(axis_tuple))
         
         for consumer in tensor.consumers:
             new_bounds = [evaluate_expr_bound(index, rmap) for index in consumer.index]
@@ -76,8 +77,8 @@ def infer_root_iter_bound(tensor, rmap):
         for root_axis in tensor.root_axis:
             rmap[root_axis] = root_axis.range
 
-def pass_down(tensor, rmap):
-    for axis in tensor.axis_sort:
+def pass_down(rmap, axis_tuple):
+    for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             # TODO: fix this: should be ceil div
             rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
@@ -91,9 +92,9 @@ def pass_down(tensor, rmap):
             # we already know root_axis's range
             pass
 
-def pass_up(tensor, rmap):
+def pass_up(rmap, axis_tuple):
     # TODO: check correctness
-    for axis in reversed(tensor.axis_sort):
+    for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             rmap[axis] = Range(0, rmap[axis.outer].end * rmap[axis.inner].end)
         elif axis.type == IterVar.FUSE:
@@ -179,4 +180,4 @@ def infer_bound_pass(tensor):
     for tensor in tensors:
         if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's bound
             infer_root_iter_bound(tensor, rmap)
-            pass_down(tensor, rmap)
+            pass_down(rmap, tensor.axis_sort)
