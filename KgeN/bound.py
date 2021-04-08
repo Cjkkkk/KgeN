@@ -123,8 +123,8 @@ def evaluate_expr_bound(expr, rmap):
         return rmap[expr]
     elif isinstance(expr, BinaryExpr):
         # TODO: fix corner cases
-        left = evaluate_expr_bound(expr.left, fixed_axis)
-        right = evaluate_expr_bound(expr.right, fixed_axis)
+        left = evaluate_expr_bound(expr.left, rmap)
+        right = evaluate_expr_bound(expr.right, rmap)
         if expr.type == Expr.ADD:
             if left.is_single_point and right.is_single_point:
                 interval = Range.single_point(left.start + right.start)
@@ -162,8 +162,8 @@ def evaluate_expr_bound(expr, rmap):
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
         # TODO: fix ifThenElseExpr
-        then_interval = evaluate_expr_bound(expr.then_expr)
-        else_interval = evaluate_expr_bound(expr.else_expr)
+        then_interval = evaluate_expr_bound(expr.then_expr, rmap)
+        else_interval = evaluate_expr_bound(expr.else_expr, rmap)
     elif isinstance(expr, TensorSliceExpr):
         # TODO: fix TensorSliceExpr
         pass
