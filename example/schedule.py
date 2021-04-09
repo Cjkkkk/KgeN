@@ -3,7 +3,7 @@ sys.path.append("..")
 
 import KgeN
 
-m = 128
+m = 256
 A = KgeN.placeholder((m, m), name = "A")
 B = KgeN.compute((m, m), lambda i, j: 2 + A[i, j], name = "B")
 k = KgeN.reduce_axis(128, name="k")

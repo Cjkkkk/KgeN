@@ -182,6 +182,9 @@ class BinaryExpr(Expr):
             return "({1}({0}, {2}))".format(self.left, Expr.mapping[self.type], self.right)
         return "({0} {1} {2})".format(self.left, Expr.mapping[self.type], self.right)
 
+    def same_as(self, other):
+        return isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right)
+
     def CUDA_codegen(self):
         if self.type > 9: # min, max
             return "({1}({0}, {2}))".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
@@ -195,6 +198,9 @@ class VarExpr(Expr):
     def __str__(self):
         return self.name
 
+    def same_as(self, other):
+        return self.name == other.name
+    
     def CUDA_codegen(self):
         return self.name
 
@@ -205,6 +211,9 @@ class ConstExpr(Expr):
 
     def __str__(self):
         return str(self.val)
+
+    def same_as(self, other):
+        return isinstance(other, ConstExpr) and self.val == other.val
 
     def CUDA_codegen(self):
         return str(self.val)
@@ -245,6 +254,9 @@ class IterVar(Expr):
     def __str__(self):
         return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == RangeType.CLOSED_CLOSED else ")")
 
+    def same_as(self, other):
+        return isinstance(other, IterVar) and self.name == other.name
+
     def CUDA_codegen(self):
         if self.type == IterVar.SPLIT:
             return "(({0} * {1}) + {2})".format(self.outer.CUDA_codegen(), self.inner.range.end.CUDA_codegen(), self.inner.CUDA_codegen())
@@ -267,7 +279,6 @@ def reduce_axis(end, name):
 
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):
-        # TODO: fix init to pass expr
         super().__init__()
         self.combinator = wrap_number_as_const_expr(combinator)
         self.init = wrap_number_as_const_expr(init)
@@ -275,6 +286,9 @@ class ReduceExpr(Expr):
         self.reduce_axis = axis if isinstance(axis, tuple) else (axis, )
     
     def __str__(self):
+        raise NotImplementedError
+    
+    def same_as(self):
         raise NotImplementedError
 
     def CUDA_codegen(self):
@@ -290,24 +304,35 @@ class IfThenElseExpr(Expr):
     def __str__(self):
         return "({0} ? {1} : {2})".format(str(self.condition), str(self.then_expr), str(self.else_expr))
     
+    def same_as(self, other):
+        return isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr)
+
     def CUDA_codegen(self):
         return "({0} ? {1} : {2})".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
+        # TODO: fix init
         super().__init__()
         self.tensor = tensor
         self.index = index
 
     def __getitem__(self, index):
         raise NotImplementedError
-        # return self.tensor[index]
 
     def __setitem__(self, index, item):
         raise NotImplementedError
     
     def __str__(self):
         return self.tensor.name + "[" + ", ".join([str(index) for index in self.index]) + "]" 
+
+    def same_as(self):
+        res = isinstance(other, TensorSliceExpr) and self.tensor.same_as(other.tensor)
+        if res:
+            idx_res = [self.index[i].same_as(other.index[i]) for i in range(len(self.index))]
+            for i in idx_res:
+                res = res and i
+        return res
 
     def CUDA_codegen(self):
         return self.tensor.name + "[" + ", ".join([index.CUDA_codegen() for index in self.index]) + "]" 
@@ -353,6 +378,9 @@ class TensorExpr(Expr):
     
     def __str__(self):
         return self.name
+
+    def same_as(other):
+        return isinstance(other, TensorExpr) and self.name == other.name
 
     def CUDA_codegen(self, indent=0):
         if self.type == TensorExpr.PLACEHOLDER:

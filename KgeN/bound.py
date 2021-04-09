@@ -51,10 +51,10 @@ def axis_topo_sort(axis_tuple):
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.consumers) > 0:
         bounds = None
-        for axis in tensor.fixed_axis:
-            rmap[axis] = Range.single_point(axis)
         
-        if len(tensor.fixed_axis) > 0:
+        if len(tensor.fixed_axis) > 0: # not necessary but just for clearity
+            for axis in tensor.fixed_axis:
+                rmap[axis] = Range.single_point(axis)
             axis_tuple = axis_topo_sort(tensor.fixed_axis)
             pass_up(rmap, reversed(axis_tuple))
         
@@ -72,6 +72,13 @@ def infer_root_iter_bound(tensor, rmap):
         for i, root_axis in enumerate(tensor.root_axis):
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
+        
+        # recover pass_up effect
+        if len(tensor.fixed_axis) > 0:
+            # TODO: check correctness
+            axis_tuple = axis_topo_sort(tensor.fixed_axis)
+            for axis in reversed(axis_tuple):
+                rmap[axis] = axis.range
     else:
         # is output tensor, therefore no consumers
         for root_axis in tensor.root_axis:
