@@ -90,14 +90,19 @@ def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             if axis.range.is_single_point:
-                pass
+                rmap[axis.outer] = Range.single_point(Expr.ceilDiv(rmap[axis].end, axis.factor))
+                rmap[axis.inner] = Range.single_point(rmap[axis].end % axis.factor)
             else:
                 rmap[axis.outer] = Range(0, Expr.ceilDiv(rmap[axis].end, axis.factor))
                 rmap[axis.inner] = Range(0, axis.factor)
-                axis.outer.range = rmap[axis.outer]
-                axis.inner.range = rmap[axis.inner]
+            axis.outer.range = rmap[axis.outer]
+            axis.inner.range = rmap[axis.inner]
         elif axis.type == IterVar.FUSE:
-            rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
+            # TODO fix this
+            if axis.range.is_single_point:
+                rmap[axis.fused] = Range.single_point(0)
+            else:
+                rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
             axis.fused.range = rmap[axis.fused]
         else:
             # we already know root_axis's range
@@ -109,7 +114,6 @@ def pass_up(rmap, axis_tuple):
             rmap[axis] = Range(0, rmap[axis.outer].end * rmap[axis.inner].end)
         elif axis.type == IterVar.FUSE:
             if axis is axis.fused.outer:
-                # TODO: fix this: should be ceil div
                 rmap[axis] = Range(0, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
             else:
                 rmap[axis] = Range(0, axis.factor)

@@ -278,11 +278,12 @@ class Range:
         return interval
 
     def normalize(self):
-        temp = self.start
-        if not self.start.same_as(ConstExpr(0)):
+        shift = ConstExpr(0)
+        if not self.start.same_as(ConstExpr(0)) and not self.is_single_point:
+            shift = self.start
             self.end = self.end - self.start
             self.start = ConstExpr(0)
-        return temp
+        return shift
 
 class IterVar(Expr):
     NORMAL = 0
