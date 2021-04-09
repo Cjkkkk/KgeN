@@ -227,7 +227,7 @@ class BinaryExpr(Expr):
         return "({0} {1} {2})".format(self.left, Expr.mapping[self.type], self.right)
 
     def same_as(self, other):
-        return isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right)
+        return self is other or (isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right))
 
     def CUDA_codegen(self):
         if self.type > 9: # min, max
@@ -243,7 +243,7 @@ class VarExpr(Expr):
         return self.name
 
     def same_as(self, other):
-        return self.name == other.name
+        return self is other or (isinstance(other, VarExpr) and self.name == other.name)
     
     def CUDA_codegen(self):
         return self.name
@@ -257,7 +257,7 @@ class ConstExpr(Expr):
         return str(self.val)
 
     def same_as(self, other):
-        return isinstance(other, ConstExpr) and self.val == other.val
+        return self is other or (isinstance(other, ConstExpr) and self.val == other.val)
 
     def CUDA_codegen(self):
         return str(self.val)
@@ -272,6 +272,9 @@ class Range:
         self.end = wrap_number_as_const_expr(end)
         self.is_single_point = False
         self.type = type_
+
+        if self.type == RangeType.CLOSED_CLOSED and self.start.same_as(self.end):
+            self.is_single_point = True
 
     @staticmethod
     def single_point(expr):
@@ -310,7 +313,7 @@ class IterVar(Expr):
         return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == RangeType.CLOSED_CLOSED else ")")
 
     def same_as(self, other):
-        return isinstance(other, IterVar) and self.name == other.name
+        return self is other or (isinstance(other, IterVar) and self.name == other.name)
 
     def CUDA_codegen(self):
         if self.range.is_single_point:
@@ -355,7 +358,7 @@ class IfThenElseExpr(Expr):
         return "({0} ? {1} : {2})".format(str(self.condition), str(self.then_expr), str(self.else_expr))
     
     def same_as(self, other):
-        return isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr)
+        return self is other or (isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr))
 
     def CUDA_codegen(self):
         return "({0} ? {1} : {2})".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
@@ -376,7 +379,9 @@ class TensorSliceExpr(Expr):
     def __str__(self):
         return self.tensor.name + "[" + ", ".join([str(index) for index in self.index]) + "]" 
 
-    def same_as(self):
+    def same_as(self, other):
+        if self is other:
+            return True
         res = isinstance(other, TensorSliceExpr) and self.tensor.same_as(other.tensor)
         if res:
             idx_res = [self.index[i].same_as(other.index[i]) for i in range(len(self.index))]
@@ -398,22 +403,26 @@ class TensorExpr(Expr):
         self.compute_func = compute_func
         self.attached = False
         self.attach_at = None
+        # is_safe == True means that no boundary test is needed
+        self.is_safe = True
         self.inputs = []
         self.consumers = []
-        self.axis = ()
-        self.root_axis = ()
-        self.fixed_axis = ()
+
+        # leaf axis
+        self.axis = [IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)]
+        self.root_axis = tuple(self.axis)
         self.reduce_axis = ()
+        # consumer's axis that is fixed, only used when compute_at
+        # for example: A.compute_at(B, B.axis[1]), then A.fixed_axis = (B.axis[0], B.axis[1])
+        self.fixed_axis = ()
 
         if tensor_type == TensorExpr.COMPUTE:
-            self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i], 0, v) for i, v in enumerate(self.shape)])
-            self.root_axis = self.axis
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
             self.inputs = collect_inputs(self.expr)
 
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
-                self.axis = tuple(self.axis + self.expr.reduce_axis)
+                self.axis = self.axis + self.expr.reduce_axis
                 self.expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr)
     
     def __getitem__(self, index):
@@ -431,7 +440,7 @@ class TensorExpr(Expr):
         return self.name
 
     def same_as(other):
-        return isinstance(other, TensorExpr) and self.name == other.name
+        return self is other or (isinstance(other, TensorExpr) and self.name == other.name)
 
     def CUDA_codegen(self, indent=0):
         if self.type == TensorExpr.PLACEHOLDER:
@@ -454,5 +463,6 @@ class TensorExpr(Expr):
             for computation in axis.attached_computation:
                 opening += computation.CUDA_codegen(scope)
         
+        # TODO: should add boundary check if can not prove no out of index happens
         body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
         return opening + body + closing

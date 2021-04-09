@@ -18,5 +18,5 @@ A TVM-like CUDA code generator.
 * add codegen for reduce and if_then_else expr
 * add boundary test to avoid out of index
 * add symbolic expression simplify
-* fix pass up and pass down
+* fix pass up and pass down (done)
 * bound normalization and cosumer index change (done)

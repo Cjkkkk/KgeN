@@ -51,12 +51,18 @@ def axis_topo_sort(axis_tuple):
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.consumers) > 0:
         bounds = None
+        # step 1: do pass up for compute_at
         if len(tensor.fixed_axis) > 0: # not necessary but just for clearity
             for axis in tensor.fixed_axis:
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, reversed(tensor.attach_at.axis_sort))
+        # step 2: calculate bound of producer
         for consumer in tensor.consumers:
             new_bounds = [evaluate_expr_bound(index, rmap) for index in consumer.index]
+            for bound in new_bounds:
+                if not bound.is_single_point:
+                    # convert back to closed_open interval
+                    bound.end = bound.end + 1
             if bounds is None:
                 bounds = new_bounds
             else:
@@ -66,17 +72,20 @@ def infer_root_iter_bound(tensor, rmap):
                             Expr.min(bounds[i].start, new_bound.start), 
                             Expr.max(bounds[i].end, new_bound.end)
                         )
-        # normalize bounds
+        
+        # step 3: normalize bounds
         shift = [bound.normalize() for bound in bounds]
         # change consumer index according to bound normalizatoin since index must start from 0
+        # for example: [-3, 125) is normalized to [0, 128)
         for consumer in tensor.consumers:
             consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
 
+        # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
         
-        # recover pass_up effect
+        # step 5: recover pass_up side effect
         if len(tensor.fixed_axis) > 0:
             for axis in tensor.attach_at.axis_sort:
                 rmap[axis] = axis.range
@@ -129,64 +138,41 @@ def pass_up(rmap, axis_tuple):
 def get_rmap(tensors):
     rmap = {}
     for tensor in tensors:
-        if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's bound
-            create_axis_sort(tensor) # cache axis sort results
-            for axis in tensor.axis_sort:
-                rmap[axis] = axis.range
+        create_axis_sort(tensor) # cache axis sort results
+        for axis in tensor.axis_sort:
+            rmap[axis] = axis.range
     return rmap
 
 def create_axis_sort(tensor):
     tensor.axis_sort = axis_topo_sort(tensor.root_axis + tensor.reduce_axis)
-
+    
 def evaluate_expr_bound(expr, rmap):
     if isinstance(expr, IterVar):
-        return rmap[expr]
+        if rmap[expr].is_single_point:
+            return rmap[expr]
+        else:
+            # convert to closed closed interval
+            return Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_OPEN)
     elif isinstance(expr, BinaryExpr):
         # TODO: fix corner cases
         left = evaluate_expr_bound(expr.left, rmap)
         right = evaluate_expr_bound(expr.right, rmap)
         if expr.type == Expr.ADD:
-            if left.is_single_point and right.is_single_point:
-                interval = Range.single_point(left.start + right.start)
-            else:
-                interval = Range(left.start + right.start, left.end + right.end)
+            interval = Range(left.start + right.start, left.end + right.end, type_= RangeType.CLOSED_OPEN)
         elif expr.type == Expr.SUB:
-            if left.is_single_point and right.is_single_point:
-                interval = Range.single_point(left.start - right.start)
-            else:
-                interval = Range(left.start - right.start, left.end - right.end)
+            interval = Range(left.start - right.start, left.end - right.end, type_= RangeType.CLOSED_OPEN)
         elif expr.type == Expr.MUL:
-            if left.is_single_point and right.is_single_point:
-                interval = Range.single_point(left.start * right.start)
-            elif not left.is_single_point and not right.is_single_point:
-                interval = Range(left.start * right.start, (left.end - 1) * (right.end - 1))
-            elif left.is_single_point and not right.is_single_point:
-                interval = Range(left.start * right.start, left.end * (right.end - 1))
-            else:
-                interval = Range(left.start * right.start, (left.end -1 ) * right.end)
+            interval = Range(left.start * right.start, left.end * right.end, type_= RangeType.CLOSED_OPEN)
         elif expr.type == Expr.FLOOR_DIV:
-            if left.is_single_point and right.is_single_point:
-                interval = Range.single_point(left.start // right.start)
-            elif not left.is_single_point and not right.is_single_point:
-                interval = Range(left.start // right.start, (left.end - 1) // (right.end - 1))
-            else:
-                interval = Range(left.start // right.start, left.end // right.end)
+            interval = Range(left.start // right.start, left.end // right.end, type_= RangeType.CLOSED_OPEN)
         elif expr.type == Expr.MOD:
-            if left.is_single_point and right.is_single_point:
-                interval = Range.single_point(left.start % right.start)
-            elif not left.is_single_point and right.is_single_point:
-                interval = Range(left.start % right.start, left.end % right.end)
-            else:
-                raise ValueError("Should not be here.")
+            interval = Range(left.start % right.start, left.end % right.end, type_= RangeType.CLOSED_OPEN)
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
         if expr.type == Expr.NEG:
             inner = evaluate_expr_bound(expr.expr, rmap)
-            if inner.is_single_point:
-                interval = Range.single_point(- inner.start)
-            else:
-                interval = Range(- inner.end, - inner.start)
+            interval = Range(- inner.end, - inner.start, type_= RangeType.CLOSED_OPEN)
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
@@ -207,6 +193,21 @@ def infer_bound_pass(tensor):
     tensors = tensor_topo_sort(tensor)
     rmap = get_rmap(tensors)
     for tensor in tensors:
-        if tensor.type != TensorExpr.PLACEHOLDER: # we don't care about placeholder's bound
-            infer_root_iter_bound(tensor, rmap)
-            pass_down(rmap, tensor.axis_sort)
+        infer_root_iter_bound(tensor, rmap)
+        pass_down(rmap, tensor.axis_sort)
+
+
+def check_bound_pass(tensor):
+    tensors = tensor_topo_sort(tensor)
+    for tensor in tensors:
+        is_safe = True
+        for idx, root_axis in enumerate(tensor.root_axis):
+            # TODO: add boundary test, can prove?
+            res = isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val
+            if res:
+                # can decrease tensor size to save memory
+                tensor.shape[idx].val = root_axis.range.end.val
+            is_safe = is_safe and res
+        tensor.is_safe = is_safe
+                    
+                

@@ -25,7 +25,7 @@ def split(tensor, ax, factor):
             new_axis.append(inner)
         else:
             new_axis.append(axis)
-    tensor.axis = tuple(new_axis)
+    tensor.axis = new_axis
     return outer, inner
 
 def tile(tensor, ax1, ax2, factor1, factor2):
@@ -43,7 +43,7 @@ def reorder(tensor, axis_tuple):
             cur += 1
         else:
             new_axis_list.append(axis)
-    tensor.axis = tuple(new_axis_list)
+    tensor.axis = new_axis_list
 
 def fuse(tensor, axis_tuple):
     new_axis = []
@@ -66,7 +66,7 @@ def fuse(tensor, axis_tuple):
             continue
         else:
             new_axis.append(axis)
-    tensor.axis = tuple(new_axis)
+    tensor.axis = new_axis
     return fused
     
 def compute_at(producer, consumer, axis):
