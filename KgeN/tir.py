@@ -63,7 +63,9 @@ class Expr:
 
     def __sub__(self, other):
         other = wrap_number_as_const_expr(other)
-        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+        if self.same_as(other):
+            return ConstExpr(0)
+        elif isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val - other.val)
         elif isinstance(other, ConstExpr) and other.val == 0:
             return self
@@ -279,9 +281,12 @@ class Range:
 
     def normalize(self):
         shift = ConstExpr(0)
-        if not self.start.same_as(ConstExpr(0)) and not self.is_single_point:
+        if not self.start.same_as(ConstExpr(0)):
             shift = self.start
-            self.end = self.end - self.start
+            if not self.is_single_point:
+                self.end = self.end - self.start
+            else:
+                self.end = ConstExpr(0)
             self.start = ConstExpr(0)
         return shift
 
@@ -308,7 +313,11 @@ class IterVar(Expr):
         return isinstance(other, IterVar) and self.name == other.name
 
     def CUDA_codegen(self):
-        if self.type == IterVar.SPLIT:
+        if self.range.is_single_point:
+            return self.range.start.CUDA_codegen()
+        elif self.bind_type == IterVar.BIND:
+            return self.bind_name
+        elif self.type == IterVar.SPLIT:
             return "(({0} * {1}) + {2})".format(self.outer.CUDA_codegen(), self.inner.range.end.CUDA_codegen(), self.inner.CUDA_codegen())
         elif self.type == IterVar.FUSE:
             if self is self.fused.outer:
@@ -316,12 +325,7 @@ class IterVar(Expr):
             else:
                 return "({0} % {1})".format(self.fused.CUDA_codegen(), self.fused.inner.range.end.CUDA_codegen())
         else:
-            if self.range.is_single_point:
-                return self.range.start.CUDA_codegen()
-            elif self.bind_type == IterVar.BIND:
-                return self.bind_name
-            else:
-                return self.name
+            return self.name
 
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):

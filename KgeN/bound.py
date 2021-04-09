@@ -89,20 +89,20 @@ def infer_root_iter_bound(tensor, rmap):
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
-            if axis.range.is_single_point:
-                rmap[axis.outer] = Range.single_point(Expr.ceilDiv(rmap[axis].end, axis.factor))
-                rmap[axis.inner] = Range.single_point(rmap[axis].end % axis.factor)
+            if rmap[axis].is_single_point:
+                rmap[axis.outer] = Range.single_point(0)
+                rmap[axis.inner] = Range.single_point(0)
             else:
                 rmap[axis.outer] = Range(0, Expr.ceilDiv(rmap[axis].end, axis.factor))
                 rmap[axis.inner] = Range(0, axis.factor)
             axis.outer.range = rmap[axis.outer]
             axis.inner.range = rmap[axis.inner]
-        elif axis.type == IterVar.FUSE:
-            # TODO fix this
-            if axis.range.is_single_point:
+        elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
+            if rmap[axis].is_single_point and rmap[axis.fused.inner].is_single_point:
                 rmap[axis.fused] = Range.single_point(0)
             else:
-                rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
+                rmap[axis.fused] = Range(rmap[axis.fused.outer].start * axis.factor + rmap[axis.inner].start, 
+                                            rmap[axis.fused.outer].end * axis.factor + rmap[axis.inner].end)
             axis.fused.range = rmap[axis.fused]
         else:
             # we already know root_axis's range
@@ -111,12 +111,18 @@ def pass_down(rmap, axis_tuple):
 def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
-            rmap[axis] = Range(0, rmap[axis.outer].end * rmap[axis.inner].end)
-        elif axis.type == IterVar.FUSE:
-            if axis is axis.fused.outer:
-                rmap[axis] = Range(0, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
+            if rmap[axis.outer].is_single_point and rmap[axis.inner].is_single_point:
+                rmap[axis] = Range.single_point(rmap[axis.outer].start * axis.factor + rmap[axis.inner].start)
             else:
-                rmap[axis] = Range(0, axis.factor)
+                rmap[axis] = Range(rmap[axis.outer].start * axis.factor + rmap[axis.inner].start, 
+                                    rmap[axis.outer].end * axis.factor + rmap[axis.inner].end)
+        elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
+            if rmap[axis.fused].is_single_point:
+                rmap[axis.fused.outer] = Range.single_point(rmap[axis.fused].start // axis.fused.factor)
+                rmap[axis.fused.inner] = Range.single_point(rmap[axis.fused].start % axis.fused.factor)
+            else:
+                rmap[axis.fused.outer] = Range(rmap[axis.fused].start // axis.factor, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
+                rmap[axis.fused.inner] = Range(0, axis.factor)
         else:
             pass
 
