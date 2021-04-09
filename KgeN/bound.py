@@ -92,8 +92,7 @@ def pass_down(rmap, axis_tuple):
             if axis.range.is_single_point:
                 pass
             else:
-                # TODO: fix this: should be ceil div
-                rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
+                rmap[axis.outer] = Range(0, Expr.ceilDiv(rmap[axis].end, axis.factor))
                 rmap[axis.inner] = Range(0, axis.factor)
                 axis.outer.range = rmap[axis.outer]
                 axis.inner.range = rmap[axis.inner]
@@ -111,7 +110,7 @@ def pass_up(rmap, axis_tuple):
         elif axis.type == IterVar.FUSE:
             if axis is axis.fused.outer:
                 # TODO: fix this: should be ceil div
-                rmap[axis] = Range(0, rmap[axis.fused].end // axis.factor)
+                rmap[axis] = Range(0, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
             else:
                 rmap[axis] = Range(0, axis.factor)
         else:
