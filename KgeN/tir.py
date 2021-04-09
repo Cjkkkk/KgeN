@@ -59,7 +59,7 @@ class Expr:
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val - other.val)
         elif isinstance(other, ConstExpr) and other.val == 0:
-            raise self
+            return self
         else:
             return BinaryExpr(self, other, Expr.SUB)
 
@@ -234,6 +234,13 @@ class Range:
         interval = Range(expr, expr, RangeType.CLOSED_CLOSED)
         interval.is_single_point = True
         return interval
+
+    def normalize(self):
+        temp = self.start
+        if not self.start.same_as(ConstExpr(0)):
+            self.end = self.end - self.start
+            self.start = ConstExpr(0)
+        return temp
 
 class IterVar(Expr):
     NORMAL = 0

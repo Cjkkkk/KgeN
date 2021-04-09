@@ -1,4 +1,4 @@
-from .tir import TensorExpr, IterVar, Range
+from .tir import *
 
 
 # bound inference
@@ -55,8 +55,6 @@ def infer_root_iter_bound(tensor, rmap):
             for axis in tensor.fixed_axis:
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, reversed(tensor.attach_at.axis_sort))
-            # for axis in rmap:
-            #     print(axis.name, rmap[axis].start, rmap[axis].end)
         for consumer in tensor.consumers:
             new_bounds = [evaluate_expr_bound(index, rmap) for index in consumer.index]
             if bounds is None:
@@ -68,6 +66,12 @@ def infer_root_iter_bound(tensor, rmap):
                             Expr.min(bounds[i].start, new_bound.start), 
                             Expr.max(bounds[i].end, new_bound.end)
                         )
+        # normalize bounds
+        shift = [bound.normalize() for bound in bounds]
+        # change consumer index according to bound normalizatoin since index must start from 0
+        for consumer in tensor.consumers:
+            consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
+
         for i, root_axis in enumerate(tensor.root_axis):
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
@@ -85,11 +89,14 @@ def infer_root_iter_bound(tensor, rmap):
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
-            # TODO: fix this: should be ceil div
-            rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
-            rmap[axis.inner] = Range(0, axis.factor)
-            axis.outer.range = rmap[axis.outer]
-            axis.inner.range = rmap[axis.inner]
+            if axis.range.is_single_point:
+                pass
+            else:
+                # TODO: fix this: should be ceil div
+                rmap[axis.outer] = Range(0, rmap[axis].end // axis.factor)
+                rmap[axis.inner] = Range(0, axis.factor)
+                axis.outer.range = rmap[axis.outer]
+                axis.inner.range = rmap[axis.inner]
         elif axis.type == IterVar.FUSE:
             rmap[axis.fused] = Range(0, rmap[axis.fused.outer].end * rmap[axis.fused.inner].end)
             axis.fused.range = rmap[axis.fused]

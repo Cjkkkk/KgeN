@@ -19,3 +19,4 @@ A TVM-like CUDA code generator.
 * add boundary test to avoid out of index
 * add symbolic expression simplify
 * fix pass up and pass down
+* bound normalization and cosumer index change (done)
