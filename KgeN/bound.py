@@ -51,13 +51,12 @@ def axis_topo_sort(axis_tuple):
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.consumers) > 0:
         bounds = None
-        
         if len(tensor.fixed_axis) > 0: # not necessary but just for clearity
             for axis in tensor.fixed_axis:
                 rmap[axis] = Range.single_point(axis)
-            axis_tuple = axis_topo_sort(tensor.fixed_axis)
-            pass_up(rmap, reversed(axis_tuple))
-        
+            pass_up(rmap, reversed(tensor.attach_at.axis_sort))
+            # for axis in rmap:
+            #     print(axis.name, rmap[axis].start, rmap[axis].end)
         for consumer in tensor.consumers:
             new_bounds = [evaluate_expr_bound(index, rmap) for index in consumer.index]
             if bounds is None:
@@ -75,15 +74,14 @@ def infer_root_iter_bound(tensor, rmap):
         
         # recover pass_up effect
         if len(tensor.fixed_axis) > 0:
-            # TODO: check correctness
-            axis_tuple = axis_topo_sort(tensor.fixed_axis)
-            for axis in reversed(axis_tuple):
+            for axis in tensor.attach_at.axis_sort:
                 rmap[axis] = axis.range
     else:
         # is output tensor, therefore no consumers
         for root_axis in tensor.root_axis:
             rmap[root_axis] = root_axis.range
 
+# TODO: fix pass up and pass down, take care of single point case
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
@@ -100,7 +98,6 @@ def pass_down(rmap, axis_tuple):
             pass
 
 def pass_up(rmap, axis_tuple):
-    # TODO: check correctness
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             rmap[axis] = Range(0, rmap[axis.outer].end * rmap[axis.inner].end)
@@ -109,7 +106,7 @@ def pass_up(rmap, axis_tuple):
                 # TODO: fix this: should be ceil div
                 rmap[axis] = Range(0, rmap[axis.fused].end // axis.factor)
             else:
-                rmap[axis] = Range(0, rmap[axis.fused].end % rmap[axis.fused.inner].end)
+                rmap[axis] = Range(0, axis.factor)
         else:
             pass
 

@@ -76,5 +76,6 @@ def compute_at(producer, consumer, axis):
         if ax is axis:
             break
     producer.attached = True
+    producer.attach_at = consumer
     producer.fixed_axis = tuple(fixed_axis)
     axis.attached_computation.append(producer)

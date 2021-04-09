@@ -273,10 +273,6 @@ class IterVar(Expr):
             else:
                 return self.name
 
-def reduce_axis(end, name):
-    axis = IterVar(name, 0, end)
-    return axis
-
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):
         super().__init__()
@@ -347,6 +343,7 @@ class TensorExpr(Expr):
         self.type = tensor_type
         self.compute_func = compute_func
         self.attached = False
+        self.attach_at = None
         self.inputs = []
         self.consumers = []
         self.axis = ()

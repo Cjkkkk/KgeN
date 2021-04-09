@@ -25,3 +25,7 @@ def reduce_max(expr, axis):
 def reduce_min(expr, axis):
     combinator = lambda x, y: Expr.min(x, y)
     return ReduceExpr(combinator, math.inf, expr, axis)
+
+def reduce_axis(end, name):
+    axis = IterVar(name, 0, end)
+    return axis
