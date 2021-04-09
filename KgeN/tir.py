@@ -1,3 +1,5 @@
+import math
+
 # Expr IR
 def wrap_number_as_const_expr(v):
     if isinstance(v, int) or isinstance(v, float):
@@ -38,8 +40,9 @@ class Expr:
     LE = 9
     MIN = 10
     MAX = 11
-
-    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max"]
+    CEIL_DIV = 12
+    NEG = 13
+    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceilDiv", "-"]
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -130,6 +133,11 @@ class Expr:
     __radd__ = __add__
     __rmul__ = __mul__
 
+    def __neg__(self):
+        if isinstance(self, ConstExpr):
+            return ConstExpr(- self.val)
+        return UnaryExpr(self, Expr.NEG)
+
     @staticmethod
     def min(a, b):
         a = wrap_number_as_const_expr(a)
@@ -164,18 +172,44 @@ class Expr:
         else:
             return BinaryExpr(a, b, Expr.MAX)
 
+    @staticmethod
+    def ceilDiv(a, b):
+        a = wrap_number_as_const_expr(a)
+        b = wrap_number_as_const_expr(b)
+        if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
+            return ConstExpr(math.ceil(a.val / b.val))
+        else:
+            return BinaryExpr(a, b, Expr.CEIL_DIV)
+
     def same_as(self, other):
         raise NotImplementedError
 
     def CUDA_codegen(self):
         raise NotImplementedError
 
+
+class UnaryExpr(Expr):
+    def __init__(self, expr, type_):
+        super().__init__(expr)
+        self.expr = expr
+        self.type = type_
+
+    def __str__(self):
+        return "({0}({1}))".format(Expr.mapping[self.type], self.expr)
+
+    def same_as(self, other):
+        return isinstance(other, UnaryExpr) and self.type == other.type and self.expr.same_as(other.expr)
+
+    def CUDA_codegen(self):
+        return "({0}({1}))".format(Expr.mapping[self.type], self.expr.CUDA_codegen())
+
+
 class BinaryExpr(Expr):
-    def __init__(self, left, right, type):
+    def __init__(self, left, right, type_):
         super().__init__(left, right)
         self.left = left
         self.right = right
-        self.type = type
+        self.type = type_
 
     def __str__(self):
         if self.type > 9: # min, max

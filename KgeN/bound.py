@@ -171,6 +171,15 @@ def evaluate_expr_bound(expr, rmap):
                 raise ValueError("Should not be here.")
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
+    elif isinstance(expr, UnaryExpr):
+        if expr.type == Expr.NEG:
+            inner = evaluate_expr_bound(expr.expr, rmap)
+            if inner.is_single_point:
+                interval = Range.single_point(- inner.start)
+            else:
+                interval = Range(- inner.end, - inner.start)
+        else:
+            raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
         # TODO: fix ifThenElseExpr
         then_interval = evaluate_expr_bound(expr.then_expr, rmap)
