@@ -112,14 +112,14 @@ def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             if rmap[axis.outer].is_single_point and rmap[axis.inner].is_single_point:
-                rmap[axis] = Range.single_point(rmap[axis.outer].start * axis.factor + rmap[axis.inner].start)
+                rmap[axis] = Range.single_point(axis)
             else:
                 rmap[axis] = Range(rmap[axis.outer].start * axis.factor + rmap[axis.inner].start, 
                                     rmap[axis.outer].end * axis.factor + rmap[axis.inner].end)
         elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
             if rmap[axis.fused].is_single_point:
-                rmap[axis.fused.outer] = Range.single_point(rmap[axis.fused].start // axis.fused.factor)
-                rmap[axis.fused.inner] = Range.single_point(rmap[axis.fused].start % axis.fused.factor)
+                rmap[axis.fused.outer] = Range.single_point(axis.fused.outer)
+                rmap[axis.fused.inner] = Range.single_point(axis.fused.inner)
             else:
                 rmap[axis.fused.outer] = Range(rmap[axis.fused].start // axis.factor, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
                 rmap[axis.fused.inner] = Range(0, axis.factor)
