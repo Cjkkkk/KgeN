@@ -152,27 +152,27 @@ def evaluate_expr_bound(expr, rmap):
             return rmap[expr]
         else:
             # convert to closed closed interval
-            return Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_OPEN)
+            return Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
     elif isinstance(expr, BinaryExpr):
         # TODO: fix corner cases
         left = evaluate_expr_bound(expr.left, rmap)
         right = evaluate_expr_bound(expr.right, rmap)
         if expr.type == Expr.ADD:
-            interval = Range(left.start + right.start, left.end + right.end, type_= RangeType.CLOSED_OPEN)
+            interval = Range(left.start + right.start, left.end + right.end, type_= RangeType.CLOSED_CLOSED)
         elif expr.type == Expr.SUB:
-            interval = Range(left.start - right.start, left.end - right.end, type_= RangeType.CLOSED_OPEN)
+            interval = Range(left.start - right.start, left.end - right.end, type_= RangeType.CLOSED_CLOSED)
         elif expr.type == Expr.MUL:
-            interval = Range(left.start * right.start, left.end * right.end, type_= RangeType.CLOSED_OPEN)
+            interval = Range(left.start * right.start, left.end * right.end, type_= RangeType.CLOSED_CLOSED)
         elif expr.type == Expr.FLOOR_DIV:
-            interval = Range(left.start // right.start, left.end // right.end, type_= RangeType.CLOSED_OPEN)
+            interval = Range(left.start // right.start, left.end // right.end, type_= RangeType.CLOSED_CLOSED)
         elif expr.type == Expr.MOD:
-            interval = Range(left.start % right.start, left.end % right.end, type_= RangeType.CLOSED_OPEN)
+            interval = Range(left.start % right.start, left.end % right.end, type_= RangeType.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
         if expr.type == Expr.NEG:
             inner = evaluate_expr_bound(expr.expr, rmap)
-            interval = Range(- inner.end, - inner.start, type_= RangeType.CLOSED_OPEN)
+            interval = Range(- inner.end, - inner.start, type_= RangeType.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
