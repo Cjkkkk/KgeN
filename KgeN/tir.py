@@ -42,7 +42,8 @@ class Expr:
     MAX = 11
     CEIL_DIV = 12
     NEG = 13
-    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceilDiv", "-"]
+    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "-"]
+    
     def __init__(self, *subexprs):
         self.subexprs = subexprs
 
@@ -183,7 +184,7 @@ class Expr:
             return BinaryExpr(a, b, Expr.MAX)
 
     @staticmethod
-    def ceilDiv(a, b):
+    def ceildiv(a, b):
         a = wrap_number_as_const_expr(a)
         b = wrap_number_as_const_expr(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
@@ -197,6 +198,8 @@ class Expr:
     def CUDA_codegen(self):
         raise NotImplementedError
 
+Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
+        Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.__neg__]
 
 class UnaryExpr(Expr):
     def __init__(self, expr, type_):

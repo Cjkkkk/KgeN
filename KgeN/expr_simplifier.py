@@ -34,13 +34,9 @@ def real_match(expr, pattern):
     else:
         return pattern.match(expr)
 
-mmap = {
-    Expr.ADD: Expr.__add__
-}
-
 def eval_result(result):
     if isinstance(result, BinaryExpr):
-        return mmap[result.type](
+        return Expr.function_mapping[result.type](
             eval_result(result.left), 
             eval_result(result.right))
     else:
