@@ -48,6 +48,7 @@ class Expr:
         self.subexprs = subexprs
 
     def __add__(self, other):
+        # TODO: add expr simpifier here
         other = wrap_number_as_const_expr(other)
         if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val + other.val)

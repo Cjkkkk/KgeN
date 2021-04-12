@@ -102,7 +102,7 @@ def pass_down(rmap, axis_tuple):
                 rmap[axis.outer] = Range.single_point(0)
                 rmap[axis.inner] = Range.single_point(0)
             else:
-                rmap[axis.outer] = Range(0, Expr.ceilDiv(rmap[axis].end, axis.factor))
+                rmap[axis.outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
                 rmap[axis.inner] = Range(0, axis.factor)
             axis.outer.range = rmap[axis.outer]
             axis.inner.range = rmap[axis.inner]
