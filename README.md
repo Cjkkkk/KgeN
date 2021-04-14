@@ -23,3 +23,4 @@ A TVM-like CUDA code generator.
 - [ ] apply expr simplifier
 - [ ] fix attach.py
 - [ ] fix bound normalization
+- [ ] fix recursive attach path
