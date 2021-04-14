@@ -21,3 +21,5 @@ A TVM-like CUDA code generator.
 - [ ] add boundary test to avoid out of index
 - [x] add symbolic expression simplify
 - [ ] apply expr simplifier
+- [ ] fix attach.py
+- [ ] fix bound normalization

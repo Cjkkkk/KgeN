@@ -74,11 +74,12 @@ def infer_root_iter_bound(tensor, rmap):
                         )
         
         # step 3: normalize bounds
-        shift = [bound.normalize() for bound in bounds]
-        # change consumer index according to bound normalizatoin since index must start from 0
-        # for example: [-3, 125) is normalized to [0, 128)
-        for consumer in tensor.consumers:
-            consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
+        # TODO: fix this with attach.py
+        # shift = [bound.normalize() for bound in bounds]
+        # # change consumer index according to bound normalizatoin since index must start from 0
+        # # for example: [-3, 125) is normalized to [0, 128)
+        # for consumer in tensor.consumers:
+        #     consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
 
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
