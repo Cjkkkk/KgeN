@@ -112,8 +112,8 @@ def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             if rmap[axis].is_single_point:
-                rmap[axis.outer] = Range.single_point(0)
-                rmap[axis.inner] = Range.single_point(0)
+                rmap[axis.outer] = Range.single_point(axis.outer)
+                rmap[axis.inner] = Range.single_point(axis.inner)
             else:
                 rmap[axis.outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
                 rmap[axis.inner] = Range(0, axis.factor)
