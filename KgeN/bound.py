@@ -31,13 +31,13 @@ def topo_sort(iterable, get_output):
                 nodes_queue.append(out_node)
     return solutions
 
-def tensor_topo_sort(tensor):
+def tensor_topo_sort_bottom_up(tensor):
     def get_output(tensor):
         return tensor.inputs
     res = topo_sort([tensor], get_output)
     return res
 
-def axis_topo_sort(axis_tuple):
+def axis_topo_sort_top_down(axis_tuple):
     def get_output(axis):
         if axis.type == IterVar.SPLIT:
             return [axis.outer, axis.inner]
@@ -48,14 +48,25 @@ def axis_topo_sort(axis_tuple):
     res = topo_sort(axis_tuple, get_output)
     return res
 
+def axis_topo_sort_bottom_up(axis_tuple):
+    def get_output(axis):
+        if axis.type == IterVar.NORMAL and hasattr(axis, "parent"):
+            return [axis.parent]
+        elif axis.type == IterVar.NORMAL and hasattr(axis, "outer"):
+            return [axis.outer, axis.inner]
+        else:
+            return []
+    res = topo_sort(axis_tuple, get_output)
+    return res
+
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.consumers) > 0:
         bounds = None
         # step 1: do pass up for compute_at
-        if len(tensor.fixed_axis) > 0: # not necessary but just for clearity
-            for axis in tensor.fixed_axis:
+        if len(tensor.attach_path) > 0: # not necessary but just for clearity
+            for axis in tensor.attach_path:
                 rmap[axis] = Range.single_point(axis)
-            pass_up(rmap, reversed(tensor.attach_at.axis_sort))
+            pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
         # step 2: calculate bound of producer
         for consumer in tensor.consumers:
             new_bounds = [evaluate_expr_bound(index, rmap) for index in consumer.index]
@@ -87,8 +98,9 @@ def infer_root_iter_bound(tensor, rmap):
             root_axis.range = rmap[root_axis]
         
         # step 5: recover pass_up side effect
-        if len(tensor.fixed_axis) > 0:
-            for axis in tensor.attach_at.axis_sort:
+        if len(tensor.attach_path) > 0:
+            affected_axis = axis_topo_sort_bottom_up(tensor.attach_path)
+            for axis in affected_axis:
                 rmap[axis] = axis.range
     else:
         # is output tensor, therefore no consumers
@@ -136,17 +148,23 @@ def pass_up(rmap, axis_tuple):
         else:
             pass
 
-def get_rmap(tensors):
-    rmap = {}
-    for tensor in tensors:
-        create_axis_sort(tensor) # cache axis sort results
-        for axis in tensor.axis_sort:
-            rmap[axis] = axis.range
-    return rmap
+def set_rmap(rmap, axis_sort):
+    for axis in axis_sort:
+        rmap[axis] = axis.range
 
-def create_axis_sort(tensor):
-    tensor.axis_sort = axis_topo_sort(tensor.root_axis + tensor.reduce_axis)
-    
+def create_attach_path(tensor):
+    cur_tensor = tensor
+    attach_path = []
+    while cur_tensor.attached:
+        cur_attach_path = []
+        for axis in cur_tensor.attach_at.axis:
+            cur_attach_path.append(axis)
+            if axis is cur_tensor.attach_axis:
+                attach_path += reversed(cur_attach_path)
+                break
+        cur_tensor = cur_tensor.attach_at
+    tensor.attach_path = tuple(attach_path)
+
 def evaluate_expr_bound(expr, rmap):
     if isinstance(expr, IterVar):
         if rmap[expr].is_single_point:
@@ -155,7 +173,6 @@ def evaluate_expr_bound(expr, rmap):
             # convert to closed closed interval
             return Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
     elif isinstance(expr, BinaryExpr):
-        # TODO: fix corner cases
         left = evaluate_expr_bound(expr.left, rmap)
         right = evaluate_expr_bound(expr.right, rmap)
         if expr.type == Expr.ADD:
@@ -168,6 +185,10 @@ def evaluate_expr_bound(expr, rmap):
             interval = Range(left.start // right.start, left.end // right.end, type_= RangeType.CLOSED_CLOSED)
         elif expr.type == Expr.MOD:
             interval = Range(left.start % right.start, left.end % right.end, type_= RangeType.CLOSED_CLOSED)
+        elif expr.type == Expr.MIN:
+            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type_= RangeType.CLOSED_CLOSED)
+        elif expr.type == Expr.MAX:
+            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type_= RangeType.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
@@ -191,15 +212,18 @@ def evaluate_expr_bound(expr, rmap):
     return interval
 
 def infer_bound_pass(tensor):
-    tensors = tensor_topo_sort(tensor)
-    rmap = get_rmap(tensors)
+    tensors = tensor_topo_sort_bottom_up(tensor)
+    rmap = {}
     for tensor in tensors:
+        axis_sort = axis_topo_sort_top_down(tensor.root_axis + tensor.reduce_axis)
+        set_rmap(rmap, axis_sort)
+        create_attach_path(tensor)
         infer_root_iter_bound(tensor, rmap)
-        pass_down(rmap, tensor.axis_sort)
+        pass_down(rmap, axis_sort)
 
 
 def check_bound_pass(tensor):
-    tensors = tensor_topo_sort(tensor)
+    tensors = tensor_topo_sort_bottom_up(tensor)
     for tensor in tensors:
         is_safe = True
         for idx, root_axis in enumerate(tensor.root_axis):

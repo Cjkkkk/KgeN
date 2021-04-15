@@ -17,8 +17,12 @@ def split(tensor, ax, factor):
         if ax is axis:
             outer = IterVar(axis.name + "_outer", -math.inf, math.inf)
             inner = IterVar(axis.name + "_inner", -math.inf, math.inf)
+            
             axis.outer = outer
             axis.inner = inner
+            outer.parent = axis
+            inner.parent = axis
+
             axis.factor = factor
             axis.type = IterVar.SPLIT
             new_axis.append(outer)
@@ -69,13 +73,14 @@ def fuse(tensor, axis_tuple):
     tensor.axis = new_axis
     return fused
     
-def compute_at(producer, consumer, axis):
-    fixed_axis = []
-    for ax in consumer.axis:
-        fixed_axis.append(ax)
-        if ax is axis:
-            break
-    producer.attached = True
-    producer.attach_at = consumer
-    producer.fixed_axis = tuple(fixed_axis)
-    axis.attached_computation.append(producer)
+def compute_at(tensor, attach_at, axis):
+    # fixed_axis = []
+    # for ax in consumer.axis:
+    #     fixed_axis.append(ax)
+    #     if ax is axis:
+    #         break
+    tensor.attached = True
+    tensor.attach_at = attach_at
+    tensor.attach_axis = axis
+    # producer.fixed_axis = tuple(fixed_axis)
+    axis.attached_computation.append(tensor)

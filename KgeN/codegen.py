@@ -1,9 +1,9 @@
-from .bound import infer_bound_pass, check_bound_pass, tensor_topo_sort
+from .bound import infer_bound_pass, check_bound_pass, tensor_topo_sort_bottom_up
 from .tir import TensorSliceExpr
 
 # codegen
 def CUDA_codegen_pass(tensor):
-    tensors = tensor_topo_sort(tensor)
+    tensors = tensor_topo_sort_bottom_up(tensor)
     for tensor in tensors:
         print("buffer: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
     res = ""

@@ -416,9 +416,9 @@ class TensorExpr(Expr):
         self.axis = [IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)]
         self.root_axis = tuple(self.axis)
         self.reduce_axis = ()
-        # consumer's axis that is fixed, only used when compute_at
-        # for example: A.compute_at(B, B.axis[1]), then A.fixed_axis = (B.axis[0], B.axis[1])
-        self.fixed_axis = ()
+        # tensor's attach_path, only used when compute_at
+        # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
+        self.attach_path = ()
 
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
