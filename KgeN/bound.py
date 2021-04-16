@@ -77,10 +77,7 @@ def infer_root_iter_bound(tensor, rmap):
                     for axis in output.root_axis:
                         relax_set.add(axis)
                 new_bounds = [evaluate_expr_bound(index, rmap, relax_set) for index in consumer.index]
-                for bound in new_bounds:
-                    if not bound.is_single_point:
-                        # convert back to closed_open interval
-                        bound.end = bound.end + 1
+                
                 if bounds is None:
                     bounds = new_bounds
                 else:
@@ -88,7 +85,8 @@ def infer_root_iter_bound(tensor, rmap):
                     for i, new_bound in enumerate(new_bounds):
                         bounds[i] = Range(
                                 Expr.min(bounds[i].start, new_bound.start), 
-                                Expr.max(bounds[i].end, new_bound.end)
+                                Expr.max(bounds[i].end, new_bound.end),
+                                RangeType.CLOSED_CLOSED
                                 )
         
         # step 3: normalize bounds
@@ -101,6 +99,8 @@ def infer_root_iter_bound(tensor, rmap):
 
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
+            # convert back to closed_open interval
+            bounds[i].end = bounds[i].end + 1
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
         
@@ -179,6 +179,9 @@ def evaluate_expr_bound(expr, rmap, relax_set):
         else:
             # convert to closed closed interval
             interval = Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
+        if expr in relax_set:
+            return Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type_= RangeType.CLOSED_CLOSED)
+    
     elif isinstance(expr, BinaryExpr):
         left = evaluate_expr_bound(expr.left, rmap, relax_set)
         right = evaluate_expr_bound(expr.right, rmap, relax_set)

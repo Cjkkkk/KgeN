@@ -134,16 +134,18 @@ class Expr:
     def min(a, b):
         a = wrap_number_as_const_expr(a)
         b = wrap_number_as_const_expr(b)
+        if a.same_as(b):
+            return a
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
             return ConstExpr(min(a.val, b.val))
-        elif isinstance(self, ConstExpr) and self.val == math.inf:
-            return other
-        elif isinstance(self, ConstExpr) and self.val == -math.inf:
-            return self
-        elif isinstance(other, ConstExpr) and other.val == math.inf:
-            return self
-        elif isinstance(other, ConstExpr) and other.val == -math.inf:
-            return other
+        elif isinstance(a, ConstExpr) and a.val == math.inf:
+            return b
+        elif isinstance(a, ConstExpr) and a.val == -math.inf:
+            return a
+        elif isinstance(b, ConstExpr) and b.val == math.inf:
+            return a
+        elif isinstance(b, ConstExpr) and b.val == -math.inf:
+            return b
         else:
             return BinaryExpr(a, b, Expr.MIN)
     
@@ -151,16 +153,18 @@ class Expr:
     def max(a, b):
         a = wrap_number_as_const_expr(a)
         b = wrap_number_as_const_expr(b)
+        if a.same_as(b):
+            return a
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
             return ConstExpr(max(a.val, b.val))
-        elif isinstance(self, ConstExpr) and self.val == math.inf:
-            return self
-        elif isinstance(self, ConstExpr) and self.val == -math.inf:
-            return other
-        elif isinstance(other, ConstExpr) and other.val == math.inf:
-            return other
-        elif isinstance(other, ConstExpr) and other.val == -math.inf:
-            return self
+        elif isinstance(a, ConstExpr) and a.val == math.inf:
+            return a
+        elif isinstance(a, ConstExpr) and a.val == -math.inf:
+            return b
+        elif isinstance(b, ConstExpr) and b.val == math.inf:
+            return b
+        elif isinstance(b, ConstExpr) and b.val == -math.inf:
+            return a
         else:
             return BinaryExpr(a, b, Expr.MAX)
 
@@ -258,6 +262,7 @@ class Range:
         self.type = type_
 
         if self.type == RangeType.CLOSED_CLOSED and self.start.same_as(self.end):
+            # TODO: fix this, should be done at runtime
             self.is_single_point = True
 
     @staticmethod
@@ -438,12 +443,14 @@ class TensorExpr(Expr):
 
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
-                self.axis = self.axis + self.expr.reduce_axis
+                self.axis = list(self.root_axis + self.expr.reduce_axis)
                 self.expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr)
     
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
+        if len(index) != len(self.axis):
+            raise ValueError("should provide exactly {0} axis, got {1}.".format(len(self.axis), len(index)))
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice
