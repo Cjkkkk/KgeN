@@ -60,7 +60,7 @@ def axis_topo_sort_bottom_up(axis_tuple):
     return res
 
 def infer_root_iter_bound(tensor, rmap):
-    if len(tensor.consumers) > 0:
+    if len(tensor.outputs) > 0:
         bounds = None
         # step 1: do pass up for compute_at
         if len(tensor.attach_path) > 0: # not necessary but just for clearity
@@ -68,21 +68,28 @@ def infer_root_iter_bound(tensor, rmap):
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
         # step 2: calculate bound of producer
-        for consumer in tensor.consumers:
-            new_bounds = [evaluate_expr_bound(index, rmap) for index in consumer.index]
-            for bound in new_bounds:
-                if not bound.is_single_point:
-                    # convert back to closed_open interval
-                    bound.end = bound.end + 1
-            if bounds is None:
-                bounds = new_bounds
-            else:
-                # TODO: Test consolidate bounds
-                for i, new_bound in enumerate(new_bounds):
-                    bounds[i] = Range(
-                            Expr.min(bounds[i].start, new_bound.start), 
-                            Expr.max(bounds[i].end, new_bound.end)
-                        )
+        for output in tensor.outputs:
+            for consumer in output.consumers[tensor]:
+                relax_set = set()
+                # TODO: fix this
+                if tensor.attach_at is not output and len(output.attach_path) > 0:
+                    # tensor is not attached at current consumer
+                    for axis in output.root_axis:
+                        relax_set.add(axis)
+                new_bounds = [evaluate_expr_bound(index, rmap, relax_set) for index in consumer.index]
+                for bound in new_bounds:
+                    if not bound.is_single_point:
+                        # convert back to closed_open interval
+                        bound.end = bound.end + 1
+                if bounds is None:
+                    bounds = new_bounds
+                else:
+                    # TODO: Test consolidate bounds
+                    for i, new_bound in enumerate(new_bounds):
+                        bounds[i] = Range(
+                                Expr.min(bounds[i].start, new_bound.start), 
+                                Expr.max(bounds[i].end, new_bound.end)
+                                )
         
         # step 3: normalize bounds
         # TODO: fix this with attach.py
@@ -165,16 +172,16 @@ def create_attach_path(tensor):
         cur_tensor = cur_tensor.attach_at
     tensor.attach_path = tuple(attach_path)
 
-def evaluate_expr_bound(expr, rmap):
+def evaluate_expr_bound(expr, rmap, relax_set):
     if isinstance(expr, IterVar):
         if rmap[expr].is_single_point:
-            return rmap[expr]
+            interval = rmap[expr]
         else:
             # convert to closed closed interval
-            return Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
     elif isinstance(expr, BinaryExpr):
-        left = evaluate_expr_bound(expr.left, rmap)
-        right = evaluate_expr_bound(expr.right, rmap)
+        left = evaluate_expr_bound(expr.left, rmap, relax_set)
+        right = evaluate_expr_bound(expr.right, rmap, relax_set)
         if expr.type == Expr.ADD:
             interval = Range(left.start + right.start, left.end + right.end, type_= RangeType.CLOSED_CLOSED)
         elif expr.type == Expr.SUB:
@@ -193,14 +200,14 @@ def evaluate_expr_bound(expr, rmap):
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
         if expr.type == Expr.NEG:
-            inner = evaluate_expr_bound(expr.expr, rmap)
+            inner = evaluate_expr_bound(expr.expr, rmap, relax_set)
             interval = Range(- inner.end, - inner.start, type_= RangeType.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
         # TODO: fix ifThenElseExpr
-        then_interval = evaluate_expr_bound(expr.then_expr, rmap)
-        else_interval = evaluate_expr_bound(expr.else_expr, rmap)
+        then_interval = evaluate_expr_bound(expr.then_expr, rmap, relax_set)
+        else_interval = evaluate_expr_bound(expr.else_expr, rmap, relax_set)
     elif isinstance(expr, TensorSliceExpr):
         # TODO: fix TensorSliceExpr
         pass

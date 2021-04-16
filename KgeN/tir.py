@@ -7,26 +7,6 @@ def wrap_number_as_const_expr(v):
     else:
         return v
 
-def collect_inputs(producer):
-    inputs = set()
-    q = [producer]
-    while len(q) > 0:
-        expr = q.pop()
-        if isinstance(expr, TensorSliceExpr):
-            inputs.add(expr.tensor)
-            for index in expr.index:
-                q.append(index)
-        if isinstance(expr, BinaryExpr):
-            for subexpr in expr.subexprs:
-                q.append(subexpr)
-        if isinstance(expr, IfThenElseExpr):
-            q.append(expr.condition)
-            q.append(expr.then_expr)
-            q.append(expr.else_expr)
-        if isinstance(expr, ReduceExpr):
-            q.append(expr.expr)
-    return list(inputs)
-
 class Expr:
     ADD = 0
     MUL = 1
@@ -396,6 +376,34 @@ class TensorSliceExpr(Expr):
     def CUDA_codegen(self):
         return self.tensor.name + "[" + ", ".join([index.CUDA_codegen() for index in self.index]) + "]" 
 
+
+def collect_inputs(expr):
+    inputs = set()
+    # TODO: fix same consumer add here
+    consumers = {}
+    q = [expr]
+    while len(q) > 0:
+        expr = q.pop()
+        if isinstance(expr, TensorSliceExpr):
+            if expr.tensor in consumers:
+                consumers[expr.tensor].append(expr)
+            else:
+                consumers[expr.tensor] = [expr]
+            inputs.add(expr.tensor)
+            for index in expr.index:
+                q.append(index)
+        if isinstance(expr, BinaryExpr):
+            for subexpr in expr.subexprs:
+                q.append(subexpr)
+        if isinstance(expr, IfThenElseExpr):
+            q.append(expr.condition)
+            q.append(expr.then_expr)
+            q.append(expr.else_expr)
+        if isinstance(expr, ReduceExpr):
+            q.append(expr.expr)
+    return list(inputs), consumers
+
+
 class TensorExpr(Expr):
     PLACEHOLDER = 0
     COMPUTE = 1
@@ -410,7 +418,8 @@ class TensorExpr(Expr):
         # is_safe == True means that no boundary test is needed
         self.is_safe = True
         self.inputs = []
-        self.consumers = []
+        self.outputs = []
+        self.consumers = {}
 
         # leaf axis
         self.axis = [IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)]
@@ -422,7 +431,10 @@ class TensorExpr(Expr):
 
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
-            self.inputs = collect_inputs(self.expr)
+            self.inputs, self.consumers = collect_inputs(self.expr)
+            
+            for inp in self.inputs:
+                inp.outputs.append(self)
 
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
@@ -434,7 +446,6 @@ class TensorExpr(Expr):
             index = (index, )
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
-        self.consumers.append(tensor_slice)
         return tensor_slice
 
     def __setitem__(self, index, item):
