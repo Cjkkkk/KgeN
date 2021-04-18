@@ -86,7 +86,7 @@ def infer_root_iter_bound(tensor, rmap):
                         bounds[i] = Range(
                                 Expr.min(bounds[i].start, new_bound.start), 
                                 Expr.max(bounds[i].end, new_bound.end),
-                                RangeType.CLOSED_CLOSED
+                                type_=RangeType.CLOSED_CLOSED
                                 )
         
         # step 3: normalize bounds
@@ -94,8 +94,10 @@ def infer_root_iter_bound(tensor, rmap):
         # shift = [bound.normalize() for bound in bounds]
         # # change consumer index according to bound normalizatoin since index must start from 0
         # # for example: [-3, 125) is normalized to [0, 128)
-        # for consumer in tensor.consumers:
-        #     consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
+        ## TODO: fix this: may substract variable, for example [m, m + 5] -> [0, 5]
+        # for output in tensor.outputs:
+        #     for consumer in output.consumers[tensor]:
+        #         consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
 
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
@@ -128,7 +130,7 @@ def pass_down(rmap, axis_tuple):
             axis.inner.range = rmap[axis.inner]
         elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
             if rmap[axis].is_single_point and rmap[axis.fused.inner].is_single_point:
-                rmap[axis.fused] = Range.single_point(0)
+                rmap[axis.fused] = Range.single_point(axis.fused)
             else:
                 rmap[axis.fused] = Range(rmap[axis.fused.outer].start * axis.factor + rmap[axis.inner].start, 
                                             rmap[axis.fused.outer].end * axis.factor + rmap[axis.inner].end)
