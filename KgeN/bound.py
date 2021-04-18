@@ -59,6 +59,39 @@ def axis_topo_sort_bottom_up(axis_tuple):
     res = topo_sort(axis_tuple, get_output)
     return res
 
+def rewrite_expr(expr, shift_map):
+    if isinstance(expr, TensorSliceExpr):
+        new_idx = []
+        for index in expr.index:
+            new_idx.append(rewrite_expr(index, shift_map))
+            expr.index = tuple(new_idx)
+    elif isinstance(expr, BinaryExpr):
+        expr.left = rewrite_expr(expr.left, shift_map)
+        expr.right = rewrite_expr(expr.right, shift_map)
+    elif isinstance(expr, IfThenElseExpr):
+        expr.condition = rewrite_expr(expr.condition, shift_map)
+        expr.then_expr = rewrite_expr(expr.then_expr, shift_map)
+        expr.else_expr = rewrite_expr(expr.else_expr, shift_map)
+    elif isinstance(expr, IterVar):
+        if expr in shift_map:
+            expr = expr + shift_map[expr]
+    return expr
+
+def normalize_bound_and_rewrite_expr(tensor, bounds):
+    shift = [bound.normalize() for bound in bounds]
+    # change consumer index according to bound normalizatoin since index must start from 0
+    # for example: [-3, 125) is normalized to [0, 128)
+    root_axis_to_shift = {}
+    for i, axis in enumerate(tensor.root_axis):
+        if not shift[i].same_as(ConstExpr(0)):
+            root_axis_to_shift[axis] = shift[i]
+    
+    for output in tensor.outputs:
+        for consumer in output.consumers[tensor]:
+            consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
+    
+    tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
+
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.outputs) > 0:
         bounds = None
@@ -90,14 +123,7 @@ def infer_root_iter_bound(tensor, rmap):
                                 )
         
         # step 3: normalize bounds
-        # TODO: fix this with attach.py
-        # shift = [bound.normalize() for bound in bounds]
-        # # change consumer index according to bound normalizatoin since index must start from 0
-        # # for example: [-3, 125) is normalized to [0, 128)
-        ## TODO: fix this: may substract variable, for example [m, m + 5] -> [0, 5]
-        # for output in tensor.outputs:
-        #     for consumer in output.consumers[tensor]:
-        #         consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
+        normalize_bound_and_rewrite_expr(tensor, bounds)
 
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):

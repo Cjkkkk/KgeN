@@ -286,7 +286,7 @@ class IterVar(Expr):
 
     NONE = 3
     BIND = 4
-    def __init__(self, name, start, end):
+    def __init__(self, name, start=0, end=0):
         super().__init__()
         self.name = name
         self.range = Range(start, end)

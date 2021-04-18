@@ -54,12 +54,24 @@ def rewrite_recursive(expr, pattern, result):
         expr.right = rewrite_recursive(expr.right, pattern, result)
     return expr
 
-def reset_pattern(pattern):
-    if isinstance(pattern, BinaryExpr):
-        reset_pattern(pattern.left)
-        reset_pattern(pattern.right)
-    else:
-        pattern.reset()
+def rewrite_recursive_if(expr, pattern, result, arg, condition):
+    while True:
+        new_expr = rewrite_if(expr, pattern, result, arg, condition)
+        if new_expr.same_as(expr):
+            break
+        expr = new_expr
+
+    if isinstance(expr, BinaryExpr):
+        expr.left = rewrite_recursive(expr.left, pattern, result)
+        expr.right = rewrite_recursive(expr.right, pattern, result)
+    return expr
+
+def rewrite_if(expr, pattern, result, arg, condition):
+    ans = real_match(expr, pattern)
+    if ans and condition(arg):
+        expr = eval_result(result)
+    reset_pattern(pattern)
+    return expr
 
 def rewrite(expr, pattern, result):
     ans = real_match(expr, pattern)
@@ -68,16 +80,26 @@ def rewrite(expr, pattern, result):
     reset_pattern(pattern)
     return expr
 
+def reset_pattern(pattern):
+    if isinstance(pattern, BinaryExpr):
+        reset_pattern(pattern.left)
+        reset_pattern(pattern.right)
+    else:
+        pattern.reset()
+
 if __name__ == "__main__":
     C1 = Pattern(ConstExpr)
     C2 = Pattern(ConstExpr)
     V1 = Pattern(Expr)
     V2 = Pattern(Expr)
-    expr = IterVar("x", 0, 0) + ConstExpr(1) + ConstExpr(10) + ConstExpr(100)
+    expr = IterVar("x") + ConstExpr(1) + ConstExpr(10) + ConstExpr(100)
     expr = rewrite_recursive(expr, (V1 + C1) + C2, V1 + (C1 + C2))
     print(expr)
 
-
-    expr = ((IterVar("x", 0, 0) + ConstExpr(1)) + ConstExpr(10)) - (IterVar("x", 0, 0) + ConstExpr(1))
+    expr = ((IterVar("x") + ConstExpr(1)) + ConstExpr(10)) - (IterVar("x") + ConstExpr(1))
     expr = rewrite_recursive(expr, (V1 + V2) - V1, V2)
+    print(expr)
+
+    expr = Expr.min(IterVar("x") + ConstExpr(1), IterVar("x"))
+    expr = rewrite_recursive_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
     print(expr)
