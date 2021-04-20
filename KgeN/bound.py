@@ -1,64 +1,7 @@
-from .tir import *
+from .utils import *
 
 
 # bound inference
-def topo_sort(iterable, get_output):
-    # Kahn's algorithm
-    # calculate indegree map
-    indegree_map = {}
-    for node in iterable:
-        indegree_map[node] = 0
-    nodes_list = [*iterable]
-    for node in nodes_list:
-        out_nodes = get_output(node)
-        for out_node in out_nodes:
-            nodes_list.append(out_node)
-            if out_node not in indegree_map:
-                indegree_map[out_node] = 1
-            else:
-                indegree_map[out_node] += 1
-    
-    # dequeue node with indegree == 0 into solutions
-    nodes_queue = [*iterable]
-    solutions = []
-    while len(nodes_queue) > 0:
-        node = nodes_queue.pop()
-        solutions.append(node)
-        out_nodes = get_output(node)
-        for out_node in out_nodes:
-            indegree_map[out_node] -= 1
-            if indegree_map[out_node] == 0:
-                nodes_queue.append(out_node)
-    return solutions
-
-def tensor_topo_sort_bottom_up(tensor):
-    def get_output(tensor):
-        return tensor.inputs
-    res = topo_sort([tensor], get_output)
-    return res
-
-def axis_topo_sort_top_down(axis_tuple):
-    def get_output(axis):
-        if axis.type == IterVar.SPLIT:
-            return [axis.outer, axis.inner]
-        elif axis.type == IterVar.FUSE:
-            return [axis.fused]
-        else:
-            return []
-    res = topo_sort(axis_tuple, get_output)
-    return res
-
-def axis_topo_sort_bottom_up(axis_tuple):
-    def get_output(axis):
-        if axis.type == IterVar.NORMAL and hasattr(axis, "parent"):
-            return [axis.parent]
-        elif axis.type == IterVar.NORMAL and hasattr(axis, "outer"):
-            return [axis.outer, axis.inner]
-        else:
-            return []
-    res = topo_sort(axis_tuple, get_output)
-    return res
-
 def rewrite_expr(expr, shift_map):
     if isinstance(expr, TensorSliceExpr):
         new_idx = []
@@ -142,7 +85,7 @@ def infer_root_iter_bound(tensor, rmap):
         for root_axis in tensor.root_axis:
             rmap[root_axis] = root_axis.range
 
-# TODO: fix pass up and pass down, take care of single point case
+
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
@@ -165,6 +108,7 @@ def pass_down(rmap, axis_tuple):
             # we already know root_axis's range
             pass
 
+
 def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
@@ -183,9 +127,11 @@ def pass_up(rmap, axis_tuple):
         else:
             pass
 
+
 def set_rmap(rmap, axis_sort):
     for axis in axis_sort:
         rmap[axis] = axis.range
+
 
 def create_attach_path(tensor):
     cur_tensor = tensor
@@ -199,6 +145,7 @@ def create_attach_path(tensor):
                 break
         cur_tensor = cur_tensor.attach_at
     tensor.attach_path = tuple(attach_path)
+
 
 def evaluate_expr_bound(expr, rmap, relax_set):
     if isinstance(expr, IterVar):

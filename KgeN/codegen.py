@@ -1,4 +1,4 @@
-from .bound import infer_bound_pass, check_bound_pass, tensor_topo_sort_bottom_up
+from .utils import tensor_topo_sort_bottom_up
 from .tir import TensorSliceExpr
 
 # codegen
@@ -12,8 +12,3 @@ def CUDA_codegen_pass(tensor):
         if not t.attached:
             res += t.CUDA_codegen()
     return res
-
-def lower(tensor):
-    infer_bound_pass(tensor)
-    check_bound_pass(tensor)
-    return CUDA_codegen_pass(tensor)
