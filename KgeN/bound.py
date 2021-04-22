@@ -35,6 +35,9 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     
     tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
 
+def consolidate_range(a, b):
+    return  Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=RangeType.CLOSED_CLOSED)
+
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.outputs) > 0:
         bounds = None
@@ -59,11 +62,7 @@ def infer_root_iter_bound(tensor, rmap):
                 else:
                     # TODO: Test consolidate bounds
                     for i, new_bound in enumerate(new_bounds):
-                        bounds[i] = Range(
-                                Expr.min(bounds[i].start, new_bound.start), 
-                                Expr.max(bounds[i].end, new_bound.end),
-                                type_=RangeType.CLOSED_CLOSED
-                                )
+                        bounds[i] = consolidate_range(bounds[i], new_bound)
         
         # step 3: normalize bounds
         normalize_bound_and_rewrite_expr(tensor, bounds)
@@ -175,24 +174,24 @@ def evaluate_expr_bound(expr, rmap, relax_set):
         elif expr.type == Expr.MAX:
             interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type_= RangeType.CLOSED_CLOSED)
         else:
-            raise ValueError("Unsupported type {}.".format(expr.type))
+            raise ValueError("Unsupported op type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
         if expr.type == Expr.NEG:
             inner = evaluate_expr_bound(expr.expr, rmap, relax_set)
             interval = Range(- inner.end, - inner.start, type_= RangeType.CLOSED_CLOSED)
         else:
-            raise ValueError("Unsupported type {}.".format(expr.type))
+            raise ValueError("Unsupported op type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
         # TODO: fix ifThenElseExpr
         then_interval = evaluate_expr_bound(expr.then_expr, rmap, relax_set)
         else_interval = evaluate_expr_bound(expr.else_expr, rmap, relax_set)
+        interval = consolidate_range(then_interval, else_interval)
     elif isinstance(expr, TensorSliceExpr):
         # TODO: fix TensorSliceExpr
         pass
     elif isinstance(expr, ConstExpr) or isinstance(expr, VarExpr):
         interval = Range.single_point(expr)
     else:
-        print(expr)
         raise ValueError("Unsupported expr type {}".format(type(expr)))
     return interval
 
