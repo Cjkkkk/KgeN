@@ -271,6 +271,11 @@ class Range:
         interval.is_single_point = True
         return interval
 
+    def as_closed_open(self):
+        if self.type == RangeType.CLOSED_CLOSED:
+            self.type = RangeType.CLOSED_OPEN
+            self.end += 1
+    
     def normalize(self):
         shift = ConstExpr(0)
         if not self.start.same_as(ConstExpr(0)) and not self.is_single_point:

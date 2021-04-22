@@ -71,7 +71,7 @@ def infer_root_iter_bound(tensor, rmap):
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
             # convert back to closed_open interval
-            bounds[i].end = bounds[i].end + 1
+            bounds[i].as_closed_open()
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
         
@@ -155,7 +155,7 @@ def evaluate_expr_bound(expr, rmap, relax_set):
             # convert to closed closed interval
             interval = Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
         if expr in relax_set:
-            return Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type_= RangeType.CLOSED_CLOSED)
     
     elif isinstance(expr, BinaryExpr):
         left = evaluate_expr_bound(expr.left, rmap, relax_set)
