@@ -38,7 +38,7 @@ class Expr:
             return self
         elif isinstance(other, ConstExpr) and other.val < 0:
             return BinaryExpr(self, ConstExpr(-other.val), Expr.SUB)
-        elif isinstance(other, UnaryExpr) and other.type < Expr.NEG:
+        elif isinstance(other, UnaryExpr) and other.type == Expr.NEG:
             return BinaryExpr(self, other.expr, Expr.SUB)
         else:
             return BinaryExpr(self, other, Expr.ADD)
@@ -53,7 +53,7 @@ class Expr:
             return self
         elif isinstance(other, ConstExpr) and other.val < 0:
             return BinaryExpr(self, ConstExpr(-other.val), Expr.ADD)
-        elif isinstance(other, UnaryExpr) and other.type < Expr.NEG:
+        elif isinstance(other, UnaryExpr) and other.type == Expr.NEG:
             return BinaryExpr(self, other.expr, Expr.ADD)
         else:
             return BinaryExpr(self, other, Expr.SUB)
