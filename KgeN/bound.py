@@ -36,7 +36,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
 
 def consolidate_range(a, b):
-    return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=RangeType.CLOSED_CLOSED)
+    return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=Range.CLOSED_CLOSED)
 
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.outputs) > 0:
@@ -152,33 +152,33 @@ def evaluate_expr_bound(expr, rmap, relax_set):
             interval = rmap[expr]
         else:
             # convert to closed closed interval
-            interval = Range(rmap[expr].start, rmap[expr].end - 1, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(rmap[expr].start, rmap[expr].end - 1, type_= Range.CLOSED_CLOSED)
         if expr in relax_set:
-            interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type_= Range.CLOSED_CLOSED)
     
     elif isinstance(expr, BinaryExpr):
         left = evaluate_expr_bound(expr.left, rmap, relax_set)
         right = evaluate_expr_bound(expr.right, rmap, relax_set)
         if expr.type == Expr.ADD:
-            interval = Range(left.start + right.start, left.end + right.end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(left.start + right.start, left.end + right.end, type_= Range.CLOSED_CLOSED)
         elif expr.type == Expr.SUB:
-            interval = Range(left.start - right.start, left.end - right.end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(left.start - right.start, left.end - right.end, type_= Range.CLOSED_CLOSED)
         elif expr.type == Expr.MUL:
-            interval = Range(left.start * right.start, left.end * right.end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(left.start * right.start, left.end * right.end, type_= Range.CLOSED_CLOSED)
         elif expr.type == Expr.FLOOR_DIV:
-            interval = Range(left.start // right.start, left.end // right.end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(left.start // right.start, left.end // right.end, type_= Range.CLOSED_CLOSED)
         elif expr.type == Expr.MOD:
-            interval = Range(left.start % right.start, left.end % right.end, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(left.start % right.start, left.end % right.end, type_= Range.CLOSED_CLOSED)
         elif expr.type == Expr.MIN:
-            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type_= RangeType.CLOSED_CLOSED)
+            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type_= Range.CLOSED_CLOSED)
         elif expr.type == Expr.MAX:
-            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type_= RangeType.CLOSED_CLOSED)
+            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type_= Range.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported op type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
         if expr.type == Expr.NEG:
             inner = evaluate_expr_bound(expr.expr, rmap, relax_set)
-            interval = Range(- inner.end, - inner.start, type_= RangeType.CLOSED_CLOSED)
+            interval = Range(- inner.end, - inner.start, type_= Range.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported op type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):

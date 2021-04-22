@@ -250,30 +250,28 @@ class ConstExpr(Expr):
     def CUDA_codegen(self):
         return str(self.val)
 
-class RangeType:
+class Range:
     CLOSED_OPEN = 0
     CLOSED_CLOSED = 1
-
-class Range:
-    def __init__(self, start, end, type_= RangeType.CLOSED_OPEN):
+    def __init__(self, start, end, type_= CLOSED_OPEN):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
         self.is_single_point = False
         self.type = type_
 
-        if self.type == RangeType.CLOSED_CLOSED and self.start.same_as(self.end):
+        if self.type == Range.CLOSED_CLOSED and self.start.same_as(self.end):
             # TODO: fix this, should be done at runtime
             self.is_single_point = True
 
     @staticmethod
     def single_point(expr):
-        interval = Range(expr, expr, RangeType.CLOSED_CLOSED)
+        interval = Range(expr, expr, Range.CLOSED_CLOSED)
         interval.is_single_point = True
         return interval
 
     def as_closed_open(self):
-        if self.type == RangeType.CLOSED_CLOSED:
-            self.type = RangeType.CLOSED_OPEN
+        if self.type == Range.CLOSED_CLOSED:
+            self.type = Range.CLOSED_OPEN
             self.end += 1
     
     def normalize(self):
@@ -301,7 +299,7 @@ class IterVar(Expr):
         self.bind_name = ""
 
     def __str__(self):
-        return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == RangeType.CLOSED_CLOSED else ")")
+        return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == Range.CLOSED_CLOSED else ")")
 
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
