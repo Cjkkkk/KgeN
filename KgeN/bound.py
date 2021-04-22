@@ -36,7 +36,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
 
 def consolidate_range(a, b):
-    return  Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=RangeType.CLOSED_CLOSED)
+    return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=RangeType.CLOSED_CLOSED)
 
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.outputs) > 0:
