@@ -20,7 +20,7 @@ A TVM-like CUDA code generator.
 - [ ] add codegen for reduce and if_then_else expr
 - [ ] add boundary test to avoid out of index
 - [x] add symbolic expression simplify
-- [ ] apply expr simplifier
+- [x] apply expr simplifier
 - [x] fix attach.py
 - [x] fix bound normalization
 - [x] fix recursive attach path
