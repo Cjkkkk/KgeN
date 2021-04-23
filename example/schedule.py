@@ -1,6 +1,3 @@
-import sys
-sys.path.append("..")
-
 import KgeN
 
 m = 256
