@@ -21,6 +21,9 @@ class Pattern(Expr):
         self.is_matched = False
         self.expr = None
 
+    def same_as(self, other):
+        return False
+
 def real_match(expr, pattern):
     if isinstance(pattern, BinaryExpr):
         if isinstance(expr, BinaryExpr):
@@ -39,8 +42,10 @@ def eval_result(result):
         return Expr.function_mapping[result.type](
             eval_result(result.left), 
             eval_result(result.right))
-    else:
+    elif isinstance(result, Pattern):
         return result.expr
+    else:
+        return result
 
 def rewrite_recursive(expr, pattern, result):
     while True:
@@ -48,10 +53,6 @@ def rewrite_recursive(expr, pattern, result):
         if new_expr.same_as(expr):
             break
         expr = new_expr
-
-    if isinstance(expr, BinaryExpr):
-        expr.left = rewrite_recursive(expr.left, pattern, result)
-        expr.right = rewrite_recursive(expr.right, pattern, result)
     return expr
 
 def rewrite_recursive_if(expr, pattern, result, arg, condition):
@@ -60,10 +61,6 @@ def rewrite_recursive_if(expr, pattern, result, arg, condition):
         if new_expr.same_as(expr):
             break
         expr = new_expr
-
-    if isinstance(expr, BinaryExpr):
-        expr.left = rewrite_recursive(expr.left, pattern, result)
-        expr.right = rewrite_recursive(expr.right, pattern, result)
     return expr
 
 def rewrite_if(expr, pattern, result, arg, condition):
@@ -87,6 +84,41 @@ def reset_pattern(pattern):
     else:
         pattern.reset()
 
+def simplify(expr):
+    C1 = Pattern(ConstExpr)
+    C2 = Pattern(ConstExpr)
+    V1 = Pattern(Expr)
+    V2 = Pattern(Expr)
+    old_expr = expr
+    while True:
+        if isinstance(expr, BinaryExpr):
+            expr.left = simplify(expr.left)
+            expr.right = simplify(expr.right)
+            if expr.type == Expr.ADD:
+                expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
+                expr = rewrite(expr, (C1 + V1) + C2, V1 + (C1 + C2))
+                expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
+                expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
+                expr = rewrite(expr, C1 + C2, C1 + C2)
+            elif expr.type == Expr.SUB:
+                expr = rewrite(expr, (V1 + V2) - V1, V2)
+                expr = rewrite(expr, (V2 + V1) - V1, V2)
+                expr = rewrite(expr, V1 - V1, ConstExpr(0))
+            elif expr.type == Expr.MIN:
+                expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
+                expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
+            elif expr.type == Expr.MAX:
+                expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
+                expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
+            if old_expr.same_as(expr):
+                break
+            else:
+                old_expr = expr
+        else:
+            break
+    return expr
+
+        
 if __name__ == "__main__":
     C1 = Pattern(ConstExpr)
     C2 = Pattern(ConstExpr)

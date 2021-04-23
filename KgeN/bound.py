@@ -1,5 +1,5 @@
 from .utils import *
-
+from .expr_simplifier import simplify
 
 # bound inference
 def rewrite_expr(expr, shift_map):
@@ -18,6 +18,7 @@ def rewrite_expr(expr, shift_map):
     elif isinstance(expr, IterVar):
         if expr in shift_map:
             expr = expr + shift_map[expr]
+            expr = simplify(expr)
     return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
@@ -26,14 +27,14 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     # for example: [-3, 125) is normalized to [0, 128)
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.root_axis):
-        if not shift[i].same_as(ConstExpr(0)):
-            root_axis_to_shift[axis] = shift[i]
+        root_axis_to_shift[axis] = shift[i]
     
     for output in tensor.outputs:
         for consumer in output.consumers[tensor]:
-            consumer.index = tuple([idx - shift[i] for i, idx in enumerate(consumer.index)])
+            consumer.index = tuple([simplify(idx - shift[i]) for i, idx in enumerate(consumer.index)])
     
-    tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
+    if tensor.type != TensorExpr.PLACEHOLDER:
+        tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
 
 def consolidate_range(a, b):
     return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=Range.CLOSED_CLOSED)
@@ -94,15 +95,12 @@ def pass_down(rmap, axis_tuple):
             else:
                 rmap[axis.outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
                 rmap[axis.inner] = Range(0, axis.factor)
-            axis.outer.range = rmap[axis.outer]
-            axis.inner.range = rmap[axis.inner]
         elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
             if rmap[axis].is_single_point and rmap[axis.fused.inner].is_single_point:
                 rmap[axis.fused] = Range.single_point(axis.fused)
             else:
                 rmap[axis.fused] = Range(rmap[axis.fused.outer].start * axis.factor + rmap[axis.inner].start, 
                                             rmap[axis.fused.outer].end * axis.factor + rmap[axis.inner].end)
-            axis.fused.range = rmap[axis.fused]
         else:
             # we already know root_axis's range
             pass
@@ -195,6 +193,12 @@ def evaluate_expr_bound(expr, rmap, relax_set):
         raise ValueError("Unsupported expr type {}".format(type(expr)))
     return interval
 
+def bound_simplify_and_bind(rmap, axis_sort):
+    for axis in axis_sort:
+        rmap[axis].start = simplify(rmap[axis].start)
+        rmap[axis].end = simplify(rmap[axis].end)
+        axis.range = rmap[axis]
+
 def infer_bound_pass(tensor):
     tensors = tensor_topo_sort_bottom_up(tensor)
     rmap = {}
@@ -204,6 +208,7 @@ def infer_bound_pass(tensor):
         create_attach_path(tensor)
         infer_root_iter_bound(tensor, rmap)
         pass_down(rmap, axis_sort)
+        bound_simplify_and_bind(rmap, axis_sort)
 
 
 def check_bound_pass(tensor):
