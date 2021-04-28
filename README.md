@@ -24,4 +24,4 @@ A TVM-like CUDA code generator.
 - [x] fix attach.py
 - [x] fix bound normalization
 - [x] fix recursive attach path
-- [ ] change codegen to visitor pattern
+- [x] change codegen to visitor pattern

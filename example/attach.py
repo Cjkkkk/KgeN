@@ -1,3 +1,4 @@
+import sys
 import KgeN
 
 C = KgeN.compute((5, 16), lambda ci, cj : ci * cj, name='C')

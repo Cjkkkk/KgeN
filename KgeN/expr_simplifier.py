@@ -1,4 +1,5 @@
 from .tir import *
+from .visitor import Visitor
 
 class Pattern(Expr):
     def __init__(self, cls_):
@@ -84,40 +85,74 @@ def reset_pattern(pattern):
     else:
         pattern.reset()
 
-def simplify(expr):
-    C1 = Pattern(ConstExpr)
-    C2 = Pattern(ConstExpr)
-    V1 = Pattern(Expr)
-    V2 = Pattern(Expr)
-    old_expr = expr
-    while True:
-        if isinstance(expr, BinaryExpr):
-            expr.left = simplify(expr.left)
-            expr.right = simplify(expr.right)
-            if expr.type == Expr.ADD:
-                expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
-                expr = rewrite(expr, (C1 + V1) + C2, V1 + (C1 + C2))
-                expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
-                expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
-                expr = rewrite(expr, C1 + C2, C1 + C2)
-            elif expr.type == Expr.SUB:
-                expr = rewrite(expr, (V1 + V2) - V1, V2)
-                expr = rewrite(expr, (V2 + V1) - V1, V2)
-                expr = rewrite(expr, V1 - V1, ConstExpr(0))
-            elif expr.type == Expr.MIN:
-                expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
-                expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
-            elif expr.type == Expr.MAX:
-                expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
-                expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
-            if old_expr.same_as(expr):
-                break
-            else:
-                old_expr = expr
-        else:
-            break
-    return expr
 
+class Expr_Simpifier(Visitor):        
+    def visit_binary_expr(self, expr):
+        C1 = Pattern(ConstExpr)
+        C2 = Pattern(ConstExpr)
+        V1 = Pattern(Expr)
+        V2 = Pattern(Expr)
+        old_expr = expr
+        while True:
+            if isinstance(expr, BinaryExpr):
+                expr.left = self.visit(expr.left)
+                expr.right = self.visit(expr.right)
+                if expr.type == Expr.ADD:
+                    expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
+                    expr = rewrite(expr, (C1 + V1) + C2, V1 + (C1 + C2))
+                    expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
+                    expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
+                    expr = rewrite(expr, C1 + C2, C1 + C2)
+                elif expr.type == Expr.SUB:
+                    expr = rewrite(expr, (V1 + V2) - V1, V2)
+                    expr = rewrite(expr, (V2 + V1) - V1, V2)
+                    expr = rewrite(expr, V1 - V1, ConstExpr(0))
+                elif expr.type == Expr.MIN:
+                    expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
+                    expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
+                elif expr.type == Expr.MAX:
+                    expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
+                    expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
+                if old_expr.same_as(expr):
+                    break
+                else:
+                    old_expr = expr
+            else:
+                break
+        return expr
+    
+    def visit_unary_expr(self, expr):
+        raise NotImplemented
+
+    def visit_var_expr(self, expr):
+        return expr
+
+    def visit_const_expr(self, expr):
+        return expr
+
+    def visit_iter_expr(self, expr):
+        return expr
+
+    def visit_if_then_else_expr(self, expr):
+        expr.condition = self.visit(expr.condition)
+        expr.then_expr = self.visit(expr.then_expr)
+        expr.else_expr = self.visit(expr.else_expr)
+        return expr
+    
+    def visit_reduce_expr(self, expr):
+        raise NotImplemented
+
+    def visit_tensor_expr(self, expr):
+        return expr
+
+    def visit_tensor_slice_expr(self, expr):
+        new_idx = []
+        for index in expr.index:
+            new_idx.append(self.visit(index))
+            expr.index = tuple(new_idx)
+        return expr
+
+expr_simpifier = Expr_Simpifier()
         
 if __name__ == "__main__":
     C1 = Pattern(ConstExpr)

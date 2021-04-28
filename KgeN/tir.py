@@ -179,9 +179,9 @@ class Expr:
 
     def same_as(self, other):
         raise NotImplementedError
-
-    def CUDA_codegen(self):
-        raise NotImplementedError
+    
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit(self, *args, **kargs)
 
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
         Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.__neg__]
@@ -197,9 +197,6 @@ class UnaryExpr(Expr):
 
     def same_as(self, other):
         return isinstance(other, UnaryExpr) and self.type == other.type and self.expr.same_as(other.expr)
-
-    def CUDA_codegen(self):
-        return "({0}({1}))".format(Expr.mapping[self.type], self.expr.CUDA_codegen())
 
 
 class BinaryExpr(Expr):
@@ -217,11 +214,6 @@ class BinaryExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right))
 
-    def CUDA_codegen(self):
-        if self.type > 9: # min, max
-            return "({1}({0}, {2}))".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
-        return "({0} {1} {2})".format(self.left.CUDA_codegen(), Expr.mapping[self.type], self.right.CUDA_codegen())
-
 class VarExpr(Expr):
     def __init__(self, name):
         super().__init__()
@@ -232,9 +224,7 @@ class VarExpr(Expr):
 
     def same_as(self, other):
         return self is other or (isinstance(other, VarExpr) and self.name == other.name)
-    
-    def CUDA_codegen(self):
-        return self.name
+
 
 class ConstExpr(Expr):
     def __init__(self, val):
@@ -247,8 +237,6 @@ class ConstExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, ConstExpr) and self.val == other.val)
 
-    def CUDA_codegen(self):
-        return str(self.val)
 
 class Range:
     CLOSED_OPEN = 0
@@ -282,6 +270,7 @@ class Range:
             self.start = ConstExpr(0)
         return shift
 
+
 class IterVar(Expr):
     NORMAL = 0
     SPLIT = 1
@@ -304,20 +293,6 @@ class IterVar(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
 
-    def CUDA_codegen(self):
-        if self.range.is_single_point:
-            return self.range.start.CUDA_codegen()
-        elif self.bind_type == IterVar.BIND:
-            return self.bind_name
-        elif self.type == IterVar.SPLIT:
-            return "(({0} * {1}) + {2})".format(self.outer.CUDA_codegen(), self.inner.range.end.CUDA_codegen(), self.inner.CUDA_codegen())
-        elif self.type == IterVar.FUSE:
-            if self is self.fused.outer:
-                return "({0} // {1})".format(self.fused.CUDA_codegen(), self.fused.inner.range.end.CUDA_codegen())
-            else:
-                return "({0} % {1})".format(self.fused.CUDA_codegen(), self.fused.inner.range.end.CUDA_codegen())
-        else:
-            return self.name
 
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):
@@ -332,10 +307,8 @@ class ReduceExpr(Expr):
     
     def same_as(self):
         raise NotImplementedError
-
-    def CUDA_codegen(self):
-        raise NotImplementedError
  
+
 class IfThenElseExpr(Expr):
     def __init__(self, condition, then_expr, else_expr):
         super().__init__(condition, then_expr, else_expr)
@@ -349,8 +322,6 @@ class IfThenElseExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr))
 
-    def CUDA_codegen(self):
-        return "({0} ? {1} : {2})".format(self.condition.CUDA_codegen(), self.then_expr.CUDA_codegen(), self.else_expr.CUDA_codegen())
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -377,9 +348,6 @@ class TensorSliceExpr(Expr):
             for i in idx_res:
                 res = res and i
         return res
-
-    def CUDA_codegen(self):
-        return self.tensor.name + "[" + ", ".join([index.CUDA_codegen() for index in self.index]) + "]" 
 
 
 def collect_inputs(expr):
@@ -463,28 +431,3 @@ class TensorExpr(Expr):
 
     def same_as(other):
         return self is other or (isinstance(other, TensorExpr) and self.name == other.name)
-
-    def CUDA_codegen(self, indent=0):
-        if self.type == TensorExpr.PLACEHOLDER:
-            return ""
-        opening = ""
-        closing = ""
-        scope = indent
-        # TODO: find out which axis to do reduce init
-        # compose loop
-        for i, axis in enumerate(self.axis):
-            if not axis.range.is_single_point and not axis.bind_type == IterVar.BIND:
-                opening += "    " * scope + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
-                    axis.name, 
-                    axis.range.start.CUDA_codegen(),
-                    axis.range.end.CUDA_codegen(),
-                    1)
-                closing = "    " * scope + "}\n" + closing
-                scope += 1
-            
-            for computation in axis.attached_computation:
-                opening += computation.CUDA_codegen(scope)
-        
-        # TODO: should add boundary check if can not prove no out of index happens
-        body = "    " * scope + TensorSliceExpr(self, self.root_axis).CUDA_codegen() + " = " + self.expr.CUDA_codegen() + ";\n"
-        return opening + body + closing
