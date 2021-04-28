@@ -181,7 +181,7 @@ class Expr:
         raise NotImplementedError
     
     def accept(self, visitor, *args, **kargs):
-        return visitor.visit(self, *args, **kargs)
+        raise NotImplemented
 
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
         Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.__neg__]
@@ -198,6 +198,8 @@ class UnaryExpr(Expr):
     def same_as(self, other):
         return isinstance(other, UnaryExpr) and self.type == other.type and self.expr.same_as(other.expr)
 
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_unary_expr(self, *args, **kargs)
 
 class BinaryExpr(Expr):
     def __init__(self, left, right, type_):
@@ -214,6 +216,10 @@ class BinaryExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right))
 
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_binary_expr(self, *args, **kargs)
+
+
 class VarExpr(Expr):
     def __init__(self, name):
         super().__init__()
@@ -224,6 +230,9 @@ class VarExpr(Expr):
 
     def same_as(self, other):
         return self is other or (isinstance(other, VarExpr) and self.name == other.name)
+
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_var_expr(self, *args, **kargs)
 
 
 class ConstExpr(Expr):
@@ -236,6 +245,9 @@ class ConstExpr(Expr):
 
     def same_as(self, other):
         return self is other or (isinstance(other, ConstExpr) and self.val == other.val)
+
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_const_expr(self, *args, **kargs)
 
 
 class Range:
@@ -293,7 +305,10 @@ class IterVar(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
 
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_iter_expr(self, *args, **kargs)
 
+    
 class ReduceExpr(Expr):
     def __init__(self, combinator, init, expr, axis):
         super().__init__()
@@ -308,6 +323,9 @@ class ReduceExpr(Expr):
     def same_as(self):
         raise NotImplementedError
  
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_reduce_expr(self, *args, **kargs)
+
 
 class IfThenElseExpr(Expr):
     def __init__(self, condition, then_expr, else_expr):
@@ -322,6 +340,9 @@ class IfThenElseExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr))
 
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_if_then_else_expr(self, *args, **kargs)
+    
 
 class TensorSliceExpr(Expr):
     def __init__(self, tensor, index):
@@ -348,6 +369,9 @@ class TensorSliceExpr(Expr):
             for i in idx_res:
                 res = res and i
         return res
+
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_tensor_slice_expr(self, *args, **kargs)
 
 
 def collect_inputs(expr):
@@ -431,3 +455,6 @@ class TensorExpr(Expr):
 
     def same_as(other):
         return self is other or (isinstance(other, TensorExpr) and self.name == other.name)
+
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_tensor_expr(self, *args, **kargs)

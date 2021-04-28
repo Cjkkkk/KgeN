@@ -95,8 +95,8 @@ class Expr_Simpifier(Visitor):
         old_expr = expr
         while True:
             if isinstance(expr, BinaryExpr):
-                expr.left = self.visit(expr.left)
-                expr.right = self.visit(expr.right)
+                expr.left = expr.left.accept(self)
+                expr.right = expr.right.accept(self)
                 if expr.type == Expr.ADD:
                     expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
                     expr = rewrite(expr, (C1 + V1) + C2, V1 + (C1 + C2))
@@ -134,9 +134,9 @@ class Expr_Simpifier(Visitor):
         return expr
 
     def visit_if_then_else_expr(self, expr):
-        expr.condition = self.visit(expr.condition)
-        expr.then_expr = self.visit(expr.then_expr)
-        expr.else_expr = self.visit(expr.else_expr)
+        expr.condition = expr.condition.accept(self)
+        expr.then_expr = expr.then_expr.accept(self)
+        expr.else_expr = expr.else_expr.accept(self)
         return expr
     
     def visit_reduce_expr(self, expr):
@@ -148,9 +148,12 @@ class Expr_Simpifier(Visitor):
     def visit_tensor_slice_expr(self, expr):
         new_idx = []
         for index in expr.index:
-            new_idx.append(self.visit(index))
+            new_idx.append(index.accept(self))
             expr.index = tuple(new_idx)
         return expr
+
+    def simpify(self, expr):
+        return expr.accept(self)
 
 expr_simpifier = Expr_Simpifier()
         

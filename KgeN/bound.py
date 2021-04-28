@@ -18,7 +18,7 @@ def rewrite_expr(expr, shift_map):
     elif isinstance(expr, IterVar):
         if expr in shift_map:
             expr = expr + shift_map[expr]
-            expr = expr_simpifier.visit(expr)
+            expr = expr_simpifier.simpify(expr)
     return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
@@ -31,7 +31,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     
     for output in tensor.outputs:
         for consumer in output.consumers[tensor]:
-            consumer.index = tuple([expr_simpifier.visit(idx - shift[i]) for i, idx in enumerate(consumer.index)])
+            consumer.index = tuple([expr_simpifier.simpify(idx - shift[i]) for i, idx in enumerate(consumer.index)])
     
     if tensor.type != TensorExpr.PLACEHOLDER:
         tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
@@ -195,8 +195,8 @@ def evaluate_expr_bound(expr, rmap, relax_set):
 
 def bound_simplify_and_bind(rmap, axis_sort):
     for axis in axis_sort:
-        rmap[axis].start = expr_simpifier.visit(rmap[axis].start)
-        rmap[axis].end = expr_simpifier.visit(rmap[axis].end)
+        rmap[axis].start = expr_simpifier.simpify(rmap[axis].start)
+        rmap[axis].end = expr_simpifier.simpify(rmap[axis].end)
         axis.range = rmap[axis]
 
 def infer_bound_pass(tensor):
