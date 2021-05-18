@@ -85,20 +85,14 @@ class CUDA_code_generator(Visitor):
                     else:
                         init_axis.append(axis)
             
-            # import types
-            # import functools
-            # def copy_func(f):
-            #     g = types.FunctionType(f.__code__, f.__globals__, name=f.__name__,
-            #                         argdefs=f.__defaults__,
-            #                         closure=f.__closure__)
-            #     g = functools.update_wrapper(g, f)
-            #     g.__kwdefaults__ = f.__kwdefaults__
-            #     return g
+            # TODO: fix this, use te.compute
             import copy
             init = copy.copy(expr)
             copy_init_axis = copy.deepcopy(init_axis)
             init.axis = copy_init_axis
             init.expr = expr.expr.init
+            # avoid unintentional attach
+            init.attached_computation = []
             compute_at(init, expr, attach_axis)
 
         # compose loop
