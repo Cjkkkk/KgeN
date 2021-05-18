@@ -1,10 +1,14 @@
 from .utils import tensor_topo_sort_bottom_up, axis_topo_sort_top_down
 from .tir import *
 from .visitor import Visitor
-
+from .te import *
+from .schedule import *
 
 # codegen
 class CUDA_code_generator(Visitor):
+    def as_stm(str, scope):
+        return "    " * scope
+
     def visit_binary_expr(self, expr):
         if expr.type > 9: # min, max
             return "({1}({0}, {2}))".format(expr.left.accept(self), Expr.mapping[expr.type], expr.right.accept(self))
@@ -19,7 +23,13 @@ class CUDA_code_generator(Visitor):
     def visit_const_expr(self, expr):
         return str(expr.val)
 
-    def visit_iter_expr(self, expr):
+    def visit_iter_expr(self, expr, as_stm=False):
+        if as_stm:
+            return "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
+                            expr.name, 
+                            expr.range.start.accept(self),
+                            expr.range.end.accept(self),
+                            1)
         if expr.range.is_single_point:
             return expr.range.start.accept(self)
         elif expr.bind_type == IterVar.BIND:
@@ -49,8 +59,14 @@ class CUDA_code_generator(Visitor):
         scope = indent
 
         # TODO: find out which axis to do reduce init
-        is_init_attach = True
-        attach_axis = None
+        def get_fake_axis():
+            axis = IterVar("", 0, 0, Range.CLOSED_CLOSED)
+            return axis
+
+        fake_axis = get_fake_axis()
+        attach_axis = fake_axis
+        init_axis = []
+
         if isinstance(expr.expr, ReduceExpr):
             # reduce expression
             all_reduce_axis = set(axis_topo_sort_top_down(expr.reduce_axis))
@@ -63,39 +79,36 @@ class CUDA_code_generator(Visitor):
                     break
             for idx, axis in enumerate(reversed(expr.axis)):
                 if axis in all_regular_axis:
-                    max_regular_axis_idx = len(expr.axis) - 1 - idx
-                    attach_axis = axis
-                    break
-            if min_reduce_axis_idx < max_regular_axis_idx:
-                # can not attach init in axis
-                is_init_attach = False
-                new_scope = scope
-                for i, axis in enumerate(expr.root_axis):
-                    if not axis.range.is_single_point and not axis.bind_type == IterVar.BIND:
-                        opening += "    " * new_scope + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
-                            axis.name, 
-                            axis.range.start.accept(self),
-                            axis.range.end.accept(self),
-                            1)
-                        closing = "    " * new_scope + "}\n" + closing
-                        new_scope += 1
-                body += "    " * new_scope + TensorSliceExpr(expr, expr.root_axis).accept(self) + " = " + expr.expr.init.accept(self) + ";\n"
-                opening = opening + body + closing
-                closing = ""
-                body = ""
+                    if idx > min_reduce_axis_idx:
+                        attach_axis = axis
+                        break
+                    else:
+                        init_axis.append(axis)
+            
+            # import types
+            # import functools
+            # def copy_func(f):
+            #     g = types.FunctionType(f.__code__, f.__globals__, name=f.__name__,
+            #                         argdefs=f.__defaults__,
+            #                         closure=f.__closure__)
+            #     g = functools.update_wrapper(g, f)
+            #     g.__kwdefaults__ = f.__kwdefaults__
+            #     return g
+            import copy
+            init = copy.copy(expr)
+            copy_init_axis = copy.deepcopy(init_axis)
+            init.axis = copy_init_axis
+            init.expr = expr.expr.init
+            compute_at(init, expr, attach_axis)
+
         # compose loop
-        for i, axis in enumerate(expr.axis):
+        for i, axis in enumerate([fake_axis] + expr.axis):
             if not axis.range.is_single_point and not axis.bind_type == IterVar.BIND:
-                opening += "    " * scope + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
-                    axis.name, 
-                    axis.range.start.accept(self),
-                    axis.range.end.accept(self),
-                    1)
+                opening += "    " * scope + axis.accept(self, True)
                 closing = "    " * scope + "}\n" + closing
                 scope += 1
-            if is_init_attach and axis is attach_axis:
-                # attach init here
-                opening += "    " * scope + TensorSliceExpr(expr, expr.root_axis).accept(self) + " = " + expr.expr.init.accept(self) + ";\n"
+            
+            # compute at
             for computation in axis.attached_computation:
                 opening += computation.accept(self, scope)
         

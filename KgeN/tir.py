@@ -290,10 +290,10 @@ class IterVar(Expr):
 
     NONE = 3
     BIND = 4
-    def __init__(self, name, start=0, end=0):
+    def __init__(self, name, start=0, end=0, type_= Range.CLOSED_OPEN):
         super().__init__()
         self.name = name
-        self.range = Range(start, end)
+        self.range = Range(start, end, type_)
         self.attached_computation = []
         self.type = IterVar.NORMAL
         self.bind_type = IterVar.NONE
