@@ -17,7 +17,7 @@ A TVM-like CUDA code generator.
 - [x] bound normalization and cosumer index change
 - [x] fix eval_expr_bound with opening and closing corner case
 - [ ] add expr comparison for min max expr
-- [ ] add codegen for reduce and if_then_else expr
+- [x] add codegen for reduce and if_then_else expr
 - [ ] add boundary test to avoid out of index
 - [x] add symbolic expression simplify
 - [x] apply expr simplifier
