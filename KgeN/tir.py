@@ -436,8 +436,7 @@ class TensorExpr(Expr):
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
                 self.axis = list(self.root_axis + self.expr.reduce_axis)
-                self.expr = self.expr.combinator(TensorSliceExpr(self, self.root_axis), self.expr.expr)
-    
+                
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )

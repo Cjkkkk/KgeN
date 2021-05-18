@@ -11,4 +11,6 @@ C = KgeN.compute((M, N),
     lambda i, j: KgeN.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
+M, N, K = C.axis
+KgeN.reorder(C, (K, N))
 print(KgeN.lower(C))
