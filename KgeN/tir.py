@@ -457,3 +457,38 @@ class TensorExpr(Expr):
 
     def accept(self, visitor, *args, **kargs):
         return visitor.visit_tensor_expr(self, *args, **kargs)
+
+
+class Stmt:
+    def __init__(self):
+        pass
+    
+    def accept(self, visitor, *args, **kargs):
+        raise NotImplemented
+
+class FuncStmt(Stmt):
+    def __init__(self):
+        super().__init__()
+        self.body = []
+        self.buffers = []
+
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_func_stmt(self, *args, **kargs)
+
+class ForStmt(Stmt):
+    def __init__(self, iter_var):
+        super().__init__()
+        self.iter_var = iter_var
+        self.body = []
+    
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_for_stmt(self, *args, **kargs)
+
+class AssignStmt(Stmt):
+    def __init__(self, dest, source):
+        super().__init__()
+        self.dest = dest
+        self.source = source
+    
+    def accept(self, visitor, *args, **kargs):
+        return visitor.visit_assign_stmt(self, *args, **kargs)

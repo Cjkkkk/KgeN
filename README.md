@@ -25,4 +25,4 @@ A TVM-like CUDA code generator.
 - [x] fix bound normalization
 - [x] fix recursive attach path
 - [x] change codegen to visitor pattern
-- [ ] transform into stmts
+- [x] transform into stmts

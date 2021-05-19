@@ -1,7 +1,16 @@
 from .tir import *
 
 
-class Visitor:        
+class Visitor:
+    def visit_func_stmt(self, stmt, *args, **kargs):
+        raise NotImplemented
+
+    def visit_for_stmt(self, stmt, *args, **kargs):
+        raise NotImplemented
+    
+    def visit_assign_stmt(self, stmt, *args, **kargs):
+        raise NotImplemented
+            
     def visit_binary_expr(self, expr, *args, **kargs):
         raise NotImplemented
     

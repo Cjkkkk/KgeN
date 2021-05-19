@@ -199,8 +199,7 @@ def bound_simplify_and_bind(rmap, axis_sort):
         rmap[axis].end = expr_simpifier.simpify(rmap[axis].end)
         axis.range = rmap[axis]
 
-def infer_bound_pass(tensor):
-    tensors = tensor_topo_sort_bottom_up(tensor)
+def infer_bound_pass(tensors):
     rmap = {}
     for tensor in tensors:
         axis_sort = axis_topo_sort_top_down(tensor.root_axis + tensor.reduce_axis)
@@ -211,8 +210,7 @@ def infer_bound_pass(tensor):
         bound_simplify_and_bind(rmap, axis_sort)
 
 
-def check_bound_pass(tensor):
-    tensors = tensor_topo_sort_bottom_up(tensor)
+def check_bound_pass(tensors):
     for tensor in tensors:
         is_safe = True
         for idx, root_axis in enumerate(tensor.root_axis):
