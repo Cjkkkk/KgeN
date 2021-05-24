@@ -122,7 +122,7 @@ class Expr_Simpifier(Visitor):
         return expr
     
     def visit_unary_expr(self, expr):
-        raise NotImplemented
+        raise NotImplementedError
 
     def visit_var_expr(self, expr):
         return expr
@@ -140,7 +140,7 @@ class Expr_Simpifier(Visitor):
         return expr
     
     def visit_reduce_expr(self, expr):
-        raise NotImplemented
+        raise NotImplementedError
 
     def visit_tensor_expr(self, expr):
         return expr

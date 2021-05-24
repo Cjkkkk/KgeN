@@ -1,4 +1,5 @@
 import math
+from .visitor import Visitor
 
 # Expr IR
 def wrap_number_as_const_expr(v):
@@ -181,7 +182,7 @@ class Expr:
         raise NotImplementedError
     
     def accept(self, visitor):
-        raise NotImplemented
+        raise NotImplementedError
 
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
         Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.__neg__]
@@ -373,33 +374,50 @@ class TensorSliceExpr(Expr):
     def accept(self, visitor):
         return visitor.visit_tensor_slice_expr(self)
 
+class CollectInputVisitor(Visitor):
+    def __init__(self):
+        self.inputs = set()
+        self.consumers = {}
 
-def collect_inputs(expr):
-    inputs = set()
-    # TODO: fix same consumer add here
-    consumers = {}
-    q = [expr]
-    while len(q) > 0:
-        expr = q.pop()
-        if isinstance(expr, TensorSliceExpr):
-            if expr.tensor in consumers:
-                consumers[expr.tensor].append(expr)
-            else:
-                consumers[expr.tensor] = [expr]
-            inputs.add(expr.tensor)
-            for index in expr.index:
-                q.append(index)
-        if isinstance(expr, BinaryExpr):
-            for subexpr in expr.subexprs:
-                q.append(subexpr)
-        if isinstance(expr, IfThenElseExpr):
-            q.append(expr.condition)
-            q.append(expr.then_expr)
-            q.append(expr.else_expr)
-        if isinstance(expr, ReduceExpr):
-            q.append(expr.expr)
-    return list(inputs), consumers
+    def collect(self, expr):
+        expr.accept(self)
+        return list(self.inputs), self.consumers
+            
+    def visit_binary_expr(self, expr):
+        for subexpr in expr.subexprs:
+            subexpr.accept(self)
 
+    def visit_if_then_else_expr(self, expr):
+        expr.condition.accept(self)
+        expr.then_expr.accept(self)
+        expr.else_expr.accept(self)
+    
+    def visit_reduce_expr(self, expr):
+        expr.expr.accept(self)
+
+    def visit_tensor_slice_expr(self, expr):
+        if expr.tensor in self.consumers:
+            self.consumers[expr.tensor].append(expr)
+        else:
+            self.consumers[expr.tensor] = [expr]
+        self.inputs.add(expr.tensor)
+        for index in expr.index:
+            index.accept(self)
+    
+    def visit_unary_expr(self, expr):
+        pass
+
+    def visit_var_expr(self, expr):
+        pass
+
+    def visit_const_expr(self, expr):
+        pass
+
+    def visit_iter_expr(self, expr):
+        pass
+
+    def visit_tensor_expr(self, expr):
+        pass
 
 class TensorExpr(Expr):
     PLACEHOLDER = 0
@@ -432,7 +450,8 @@ class TensorExpr(Expr):
 
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
-            self.inputs, self.consumers = collect_inputs(self.expr)
+            visitor = CollectInputVisitor()
+            self.inputs, self.consumers = visitor.collect(self.expr)
             
             for inp in self.inputs:
                 inp.outputs.append(self)
@@ -449,9 +468,6 @@ class TensorExpr(Expr):
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice
-
-    def __setitem__(self, index, item):
-        raise NotImplementedError
     
     def __str__(self):
         return self.name
@@ -471,7 +487,7 @@ class Stmt:
         pass
     
     def accept(self, visitor):
-        raise NotImplemented
+        raise NotImplementedError
 
 class FuncStmt(Stmt):
     def __init__(self):
