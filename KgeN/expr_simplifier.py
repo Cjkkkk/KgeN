@@ -110,46 +110,44 @@ class Expr_Simpifier(Visitor):
         V2 = Pattern(Expr)
         old_expr = expr
         while True:
-            if isinstance(expr, BinaryExpr):
-                expr.left = expr.left.accept(self)
-                expr.right = expr.right.accept(self)
-                if expr.type == Expr.ADD:
-                    expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
-                    expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
-                    expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
-                    expr = rewrite(expr, C1 + C2, C1 + C2)
-                elif expr.type == Expr.SUB:
-                    expr = rewrite(expr, (V1 + V2) - V1, V2)
-                    expr = rewrite(expr, V1 - V1, ConstExpr(0))
-                elif expr.type == Expr.MIN:
-                    expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
-                    expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
-                elif expr.type == Expr.MAX:
-                    expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
-                    expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
-                if old_expr.same_as(expr):
-                    break
-                else:
-                    old_expr = expr
+            expr.left = expr.left.accept(self)
+            expr.right = expr.right.accept(self)
+            if expr.type == Expr.ADD:
+                expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
+                expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
+                expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
+                expr = rewrite(expr, C1 + C2, C1 + C2)
+            elif expr.type == Expr.SUB:
+                expr = rewrite(expr, (V1 + V2) - V1, V2)
+                expr = rewrite(expr, V1 - V1, ConstExpr(0))
+            elif expr.type == Expr.MIN:
+                expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
+                expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
+            elif expr.type == Expr.MAX:
+                expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
+                expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
+            
+            if old_expr.same_as(expr):
+                return expr
+            elif not isinstance(expr, BinaryExpr):
+                return expr.accept(self)
             else:
-                break
-        return expr
+                old_expr = expr
     
     def visit_unary_expr(self, expr):
         V1 = Pattern(Expr)
         old_expr = expr
         while True:
-            if isinstance(expr, UnaryExpr):
-                expr.expr = expr.expr.accept(self)
-                if expr.type == Expr.NEG:
-                    expr = rewrite(expr, -(-V1), V1)
-                if old_expr.same_as(expr):
-                    break
-                else:
-                    old_expr = expr
+            expr.expr = expr.expr.accept(self)
+            if expr.type == Expr.NEG:
+                expr = rewrite(expr, -(-V1), V1)
+            
+            if old_expr.same_as(expr):
+                return expr
+            elif not isinstance(expr, UnaryExpr):
+                return expr.accept(self)
             else:
-                break
-        return expr
+                old_expr = expr
 
     def visit_var_expr(self, expr):
         return expr
