@@ -180,7 +180,7 @@ class Expr:
     def same_as(self, other):
         raise NotImplementedError
     
-    def accept(self, visitor, *args, **kargs):
+    def accept(self, visitor):
         raise NotImplemented
 
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
@@ -198,8 +198,8 @@ class UnaryExpr(Expr):
     def same_as(self, other):
         return isinstance(other, UnaryExpr) and self.type == other.type and self.expr.same_as(other.expr)
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_unary_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_unary_expr(self)
 
 class BinaryExpr(Expr):
     def __init__(self, left, right, type_):
@@ -216,8 +216,8 @@ class BinaryExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right))
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_binary_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_binary_expr(self)
 
 
 class VarExpr(Expr):
@@ -231,8 +231,8 @@ class VarExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, VarExpr) and self.name == other.name)
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_var_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_var_expr(self)
 
 
 class ConstExpr(Expr):
@@ -246,8 +246,8 @@ class ConstExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, ConstExpr) and self.val == other.val)
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_const_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_const_expr(self)
 
 
 class Range:
@@ -305,8 +305,8 @@ class IterVar(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_iter_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_iter_expr(self)
 
     
 class ReduceExpr(Expr):
@@ -323,8 +323,8 @@ class ReduceExpr(Expr):
     def same_as(self):
         raise NotImplementedError
  
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_reduce_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_reduce_expr(self)
 
 
 class IfThenElseExpr(Expr):
@@ -340,8 +340,8 @@ class IfThenElseExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr))
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_if_then_else_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_if_then_else_expr(self)
     
 
 class TensorSliceExpr(Expr):
@@ -370,8 +370,8 @@ class TensorSliceExpr(Expr):
                 res = res and i
         return res
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_tensor_slice_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_tensor_slice_expr(self)
 
 
 def collect_inputs(expr):
@@ -404,16 +404,20 @@ def collect_inputs(expr):
 class TensorExpr(Expr):
     PLACEHOLDER = 0
     COMPUTE = 1
-    def __init__(self, shape, name, tensor_type, compute_func=None):
+    def __init__(self, shape, name, tensor_type, compute_func=None, dtype="float"):
         super().__init__()
         self.shape = tuple([ConstExpr(s) if isinstance(s, int) else s for s in shape])
         self.name = name
         self.type = tensor_type
         self.compute_func = compute_func
+        self.dtype = dtype
+
         self.attached = False
         self.attach_at = None
         # is_safe == True means that no boundary test is needed
         self.is_safe = True
+
+        # tensor's inputs and outputs
         self.inputs = []
         self.outputs = []
         self.consumers = {}
@@ -452,28 +456,31 @@ class TensorExpr(Expr):
     def __str__(self):
         return self.name
 
+    def is_output(self):
+        return len(self.outputs) == 0
+
     def same_as(other):
         return self is other or (isinstance(other, TensorExpr) and self.name == other.name)
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_tensor_expr(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_tensor_expr(self)
 
 
 class Stmt:
     def __init__(self):
         pass
     
-    def accept(self, visitor, *args, **kargs):
+    def accept(self, visitor):
         raise NotImplemented
 
 class FuncStmt(Stmt):
     def __init__(self):
         super().__init__()
         self.body = []
-        self.buffers = []
+        self.tensors = []
 
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_func_stmt(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_func_stmt(self)
 
 class ForStmt(Stmt):
     def __init__(self, iter_var):
@@ -481,8 +488,8 @@ class ForStmt(Stmt):
         self.iter_var = iter_var
         self.body = []
     
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_for_stmt(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_for_stmt(self)
 
 class AssignStmt(Stmt):
     def __init__(self, dest, source):
@@ -490,5 +497,5 @@ class AssignStmt(Stmt):
         self.dest = dest
         self.source = source
     
-    def accept(self, visitor, *args, **kargs):
-        return visitor.visit_assign_stmt(self, *args, **kargs)
+    def accept(self, visitor):
+        return visitor.visit_assign_stmt(self)

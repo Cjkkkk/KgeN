@@ -26,3 +26,4 @@ A TVM-like CUDA code generator.
 - [x] fix recursive attach path
 - [x] change codegen to visitor pattern
 - [x] transform into stmts
+- [ ] tensor index flatten 

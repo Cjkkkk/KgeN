@@ -15,11 +15,20 @@ class CUDA_code_generator(Visitor):
     def exit_scope(self):
         self.scope -= 1
     
+    def gen_signature(self, func_stmt):
+        return "void kernel({})".format(", ".join([tensor.dtype + " " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors]))
+    
     def visit_func_stmt(self, stmt):
         res = ""
-        for tensor in stmt.buffers:
-            res += "buffer: {0}\n".format(TensorSliceExpr(tensor, tensor.shape))
-        return res + "".join([self.scope * "    " + st.accept(self) for st in stmt.body])
+        for tensor in stmt.tensors:
+            res += "// tensor: {0}\n".format(TensorSliceExpr(tensor, tensor.shape))
+        res += self.gen_signature(stmt)
+        res += "{\n"
+        self.enter_scope()
+        res += "".join([st.accept(self) for st in stmt.body])
+        self.exit_scope()
+        res += "}\n"
+        return res
 
     def visit_assign_stmt(self, stmt):
         return self.scope * "    " + stmt.dest.accept(self) + " = " + stmt.source.accept(self) + ";\n"
@@ -75,12 +84,6 @@ class CUDA_code_generator(Visitor):
     def visit_if_then_else_expr(self, expr):
         return "({0} ? {1} : {2})".format(expr.condition.accept(self), expr.then_expr.accept(self), expr.else_expr.accept(self))
     
-    def visit_reduce_expr(self, expr):
-        raise NotImplemented
-
-    def visit_tensor_expr(self, expr):
-        raise NotImplemented
-
     def visit_tensor_slice_expr(self, expr):
         return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
 
