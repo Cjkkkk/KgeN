@@ -102,8 +102,9 @@ def reset_pattern(pattern):
         pattern.reset()
 
 
-class Expr_Simpifier(Visitor):        
+class Expr_Simpifier(Visitor):       
     def visit_binary_expr(self, expr):
+        # TODO: move this to __init__ ?
         C1 = Pattern(ConstExpr)
         C2 = Pattern(ConstExpr)
         V1 = Pattern(Expr)
@@ -163,9 +164,6 @@ class Expr_Simpifier(Visitor):
         expr.then_expr = expr.then_expr.accept(self)
         expr.else_expr = expr.else_expr.accept(self)
         return expr
-    
-    def visit_reduce_expr(self, expr):
-        raise NotImplementedError
 
     def visit_tensor_expr(self, expr):
         return expr
