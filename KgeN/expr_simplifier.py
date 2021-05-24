@@ -41,6 +41,14 @@ def real_match(expr, pattern):
             return ans_left and ans_right
         else:
             return False
+    elif isinstance(pattern, UnaryExpr):
+        if isinstance(expr, UnaryExpr):
+            if pattern.type != expr.type:
+                return False
+            ans = real_match(expr.expr, pattern.expr)
+            return ans
+        else:
+            return False
     else:
         return pattern.match(expr)
 
@@ -88,6 +96,8 @@ def reset_pattern(pattern):
     if isinstance(pattern, BinaryExpr):
         reset_pattern(pattern.left)
         reset_pattern(pattern.right)
+    elif isinstance(pattern, UnaryExpr):
+        reset_pattern(pattern.expr)
     else:
         pattern.reset()
 
@@ -126,7 +136,20 @@ class Expr_Simpifier(Visitor):
         return expr
     
     def visit_unary_expr(self, expr):
-        raise NotImplementedError
+        V1 = Pattern(Expr)
+        old_expr = expr
+        while True:
+            if isinstance(expr, UnaryExpr):
+                expr.expr = expr.expr.accept(self)
+                if expr.type == Expr.NEG:
+                    expr = rewrite(expr, -(-V1), V1)
+                if old_expr.same_as(expr):
+                    break
+                else:
+                    old_expr = expr
+            else:
+                break
+        return expr
 
     def visit_var_expr(self, expr):
         return expr
