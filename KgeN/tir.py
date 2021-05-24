@@ -187,6 +187,9 @@ class Expr:
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
         Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.__neg__]
 
+Expr.is_commutative = [True, True, False, False, False, False, False,
+        False, False, False, True, True, False, False]
+
 class UnaryExpr(Expr):
     def __init__(self, expr, type_):
         super().__init__(expr)

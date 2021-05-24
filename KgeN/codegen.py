@@ -16,7 +16,7 @@ class CUDA_code_generator(Visitor):
         self.scope -= 1
     
     def gen_signature(self, func_stmt):
-        return "void kernel({})".format(", ".join([tensor.dtype + " " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors]))
+        return "void kernel({})".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors]))
     
     def visit_func_stmt(self, stmt):
         res = ""

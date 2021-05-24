@@ -32,6 +32,12 @@ def real_match(expr, pattern):
                 return False
             ans_left = real_match(expr.left, pattern.left)
             ans_right = real_match(expr.right, pattern.right)
+            
+            # automatically try 
+            if not (ans_left and ans_right) and Expr.is_commutative[expr.type]:
+                reset_pattern(pattern)
+                ans_left = real_match(expr.left, pattern.right)
+                ans_right = real_match(expr.right, pattern.left)
             return ans_left and ans_right
         else:
             return False
@@ -99,7 +105,6 @@ class Expr_Simpifier(Visitor):
                 expr.right = expr.right.accept(self)
                 if expr.type == Expr.ADD:
                     expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
-                    expr = rewrite(expr, (C1 + V1) + C2, V1 + (C1 + C2))
                     expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
                     expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
                     expr = rewrite(expr, C1 + C2, C1 + C2)
