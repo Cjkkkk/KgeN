@@ -459,7 +459,7 @@ class TensorExpr(Expr):
     def is_output(self):
         return len(self.outputs) == 0
 
-    def same_as(other):
+    def same_as(self, other):
         return self is other or (isinstance(other, TensorExpr) and self.name == other.name)
 
     def accept(self, visitor):
