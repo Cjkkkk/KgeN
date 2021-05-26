@@ -85,16 +85,14 @@ def cache_read(tensor, scope, readers):
     # TODO: fix lambda or directly insert expr to cache_tensor or copy?
     cache_tensor = TensorExpr(tensor.shape, cache_tensor_name, TensorExpr.COMPUTE)
     cache_tensor.expr = tensor[cache_tensor.root_axis]
-    # call collect_input to update dataflow
-    cache_tensor.collect_input()
 
     # rewrite tensor's outputs
     tensor.outputs = [output for output in tensor.outputs if output not in readers]
 
     # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
     for reader in readers:
-        # TODO: rewrite expr of reader and call collect_input to update dataflow
-        reader.collect_input()
+        # TODO: rewrite expr of reader
+        pass
 
 
 
