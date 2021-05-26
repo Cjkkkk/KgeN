@@ -93,15 +93,6 @@ def cache_read(tensor, scope, readers):
 
     # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
     for reader in readers:
-        # # rewrite inputs
-        # for idx, inp in enumerate(reader.inputs):
-        #     if inp is tensor:
-        #         reader.inputs[idx] = cache_tensor
-        # reader.providers[cache_tensor] = []
-        # # copy tensor's providers to cache_tensor
-        # for tensor_slice in reader.providers[tensor]:
-        #     reader.providers[cache_tensor].append(cache_tensor[tensor_slice.index])
-        # reader.providers.pop(tensor)
         # TODO: rewrite expr of reader and call collect_input to update dataflow
         reader.collect_input()
 

@@ -29,3 +29,4 @@ A TVM-like CUDA code generator.
 - [ ] tensor index flatten 
 - [ ] cache read
 - [ ] cache write
+- [ ] move collect input as build graph pass
