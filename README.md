@@ -27,3 +27,5 @@ A TVM-like CUDA code generator.
 - [x] change codegen to visitor pattern
 - [x] transform into stmts
 - [ ] tensor index flatten 
+- [ ] cache read
+- [ ] cache write

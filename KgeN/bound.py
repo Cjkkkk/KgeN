@@ -23,15 +23,15 @@ def rewrite_expr(expr, shift_map):
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
     shift = [bound.normalize() for bound in bounds]
-    # change consumer index according to bound normalizatoin since index must start from 0
+    # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.root_axis):
         root_axis_to_shift[axis] = shift[i]
     
     for output in tensor.outputs:
-        for consumer in output.consumers[tensor]:
-            consumer.index = tuple([expr_simpifier.simpify(idx - shift[i]) for i, idx in enumerate(consumer.index)])
+        for provider in output.providers[tensor]:
+            provider.index = tuple([expr_simpifier.simpify(idx - shift[i]) for i, idx in enumerate(provider.index)])
     
     if tensor.type != TensorExpr.PLACEHOLDER:
         tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
@@ -49,14 +49,14 @@ def infer_root_iter_bound(tensor, rmap):
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
         # step 2: calculate bound of producer
         for output in tensor.outputs:
-            for consumer in output.consumers[tensor]:
+            for provider in output.providers[tensor]:
                 relax_set = set()
                 # TODO: fix this
                 if tensor.attach_at is not output and len(output.attach_path) > 0:
-                    # tensor is not attached at current consumer
+                    # tensor is not attached at current provider
                     for axis in output.root_axis:
                         relax_set.add(axis)
-                new_bounds = [evaluate_expr_bound(index, rmap, relax_set) for index in consumer.index]
+                new_bounds = [evaluate_expr_bound(index, rmap, relax_set) for index in provider.index]
                 
                 if bounds is None:
                     bounds = new_bounds
@@ -81,7 +81,7 @@ def infer_root_iter_bound(tensor, rmap):
             for axis in affected_axis:
                 rmap[axis] = axis.range
     else:
-        # is output tensor, therefore no consumers
+        # is output tensor, therefore no providers
         for root_axis in tensor.root_axis:
             rmap[root_axis] = root_axis.range
 

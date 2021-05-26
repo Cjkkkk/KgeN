@@ -1,3 +1,4 @@
+from KgeN.KgeN.te import compute
 import math
 from .tir import *
 
@@ -74,13 +75,37 @@ def fuse(tensor, axis_tuple):
     return fused
     
 def compute_at(tensor, attach_at, axis):
-    # fixed_axis = []
-    # for ax in consumer.axis:
-    #     fixed_axis.append(ax)
-    #     if ax is axis:
-    #         break
     tensor.attached = True
     tensor.attach_at = attach_at
     tensor.attach_axis = axis
-    # producer.fixed_axis = tuple(fixed_axis)
     axis.attached_computation.append(tensor)
+
+def cache_read(tensor, scope, readers):
+    cache_tensor_name = tensor.name + "_" + scope
+    # TODO: fix lambda or directly insert expr to cache_tensor or copy?
+    cache_tensor = TensorExpr(tensor.shape, cache_tensor_name, TensorExpr.COMPUTE)
+    cache_tensor.expr = tensor[cache_tensor.root_axis]
+    # call collect_input to update dataflow
+    cache_tensor.collect_input()
+
+    # rewrite tensor's outputs
+    tensor.outputs = [output for output in tensor.outputs if output not in readers]
+
+    # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
+    for reader in readers:
+        # # rewrite inputs
+        # for idx, inp in enumerate(reader.inputs):
+        #     if inp is tensor:
+        #         reader.inputs[idx] = cache_tensor
+        # reader.providers[cache_tensor] = []
+        # # copy tensor's providers to cache_tensor
+        # for tensor_slice in reader.providers[tensor]:
+        #     reader.providers[cache_tensor].append(cache_tensor[tensor_slice.index])
+        # reader.providers.pop(tensor)
+        # TODO: rewrite expr of reader and call collect_input to update dataflow
+        reader.collect_input()
+
+
+
+def cache_write(tensor, scope):
+    pass

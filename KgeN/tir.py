@@ -380,11 +380,11 @@ class TensorSliceExpr(Expr):
 class CollectInputVisitor(Visitor):
     def __init__(self):
         self.inputs = set()
-        self.consumers = {}
+        self.providers = {}
 
     def collect(self, expr):
         expr.accept(self)
-        return list(self.inputs), self.consumers
+        return list(self.inputs), self.providers
             
     def visit_binary_expr(self, expr):
         for subexpr in expr.subexprs:
@@ -399,10 +399,10 @@ class CollectInputVisitor(Visitor):
         expr.expr.accept(self)
 
     def visit_tensor_slice_expr(self, expr):
-        if expr.tensor in self.consumers:
-            self.consumers[expr.tensor].append(expr)
+        if expr.tensor in self.providers:
+            self.providers[expr.tensor].append(expr)
         else:
-            self.consumers[expr.tensor] = [expr]
+            self.providers[expr.tensor] = [expr]
         self.inputs.add(expr.tensor)
         for index in expr.index:
             index.accept(self)
@@ -441,7 +441,7 @@ class TensorExpr(Expr):
         # tensor's inputs and outputs
         self.inputs = []
         self.outputs = []
-        self.consumers = {}
+        self.providers = {}
 
         # leaf axis
         self.axis = [IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)]
@@ -453,8 +453,7 @@ class TensorExpr(Expr):
 
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
-            visitor = CollectInputVisitor()
-            self.inputs, self.consumers = visitor.collect(self.expr)
+            self.collect_input()
             
             for inp in self.inputs:
                 inp.outputs.append(self)
@@ -462,12 +461,16 @@ class TensorExpr(Expr):
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
                 self.axis = list(self.root_axis + self.expr.reduce_axis)
-                
+
+    def collect_input(self):
+        visitor = CollectInputVisitor()
+        self.inputs, self.providers = visitor.collect(self.expr)   
+            
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
-        if len(index) != len(self.axis):
-            raise ValueError("should provide exactly {0} axis, got {1}.".format(len(self.axis), len(index)))
+        if len(index) != len(self.root_axis):
+            raise ValueError("should provide exactly {0} axis, got {1}.".format(len(self.root_axis), len(index)))
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice
