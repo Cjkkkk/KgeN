@@ -454,9 +454,6 @@ class TensorExpr(Expr):
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
             self.collect_input()
-            
-            for inp in self.inputs:
-                inp.outputs.append(self)
 
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
@@ -464,7 +461,10 @@ class TensorExpr(Expr):
 
     def collect_input(self):
         visitor = CollectInputVisitor()
-        self.inputs, self.providers = visitor.collect(self.expr)   
+        self.inputs, self.providers = visitor.collect(self.expr)
+
+        for inp in self.inputs:
+            inp.outputs.append(self)
             
     def __getitem__(self, index):
         if not isinstance(index, tuple):

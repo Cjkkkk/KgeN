@@ -1,6 +1,6 @@
-from KgeN.KgeN.te import compute
-import math
+from .te import compute
 from .tir import *
+import math
 
 # schedule primitives
 def bind(tensor, ax, name):
