@@ -3,7 +3,7 @@ from .tir import *
 import math
 
 # schedule primitives
-def bind(tensor, ax, name):
+def bind(ax, name):
     if name not in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
         raise ValueError("illegal binding name {}".format(name))
     ax.bind_type = IterVar.BIND
