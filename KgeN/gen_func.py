@@ -30,7 +30,8 @@ def add_reduce_init(tensor, fake_axis):
         init.axis = copy_init_axis
         init.expr = tensor.expr.init
         # avoid unintentional attach
-        init.attached_computation = []
+        for axis in copy_init_axis:
+            axis.attached_computation = []
         compute_at(init, tensor, attach_axis)
 
 def gen_stmt_for_tensor(tensor, stmt):

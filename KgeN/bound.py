@@ -1,40 +1,37 @@
 from .utils import *
+from .visitor import RewriteExprVisitor
 from .expr_simplifier import expr_simpifier
 
 # bound inference
-def rewrite_expr(expr, shift_map):
-    if isinstance(expr, TensorSliceExpr):
-        new_idx = []
-        for index in expr.index:
-            new_idx.append(rewrite_expr(index, shift_map))
-            expr.index = tuple(new_idx)
-    elif isinstance(expr, BinaryExpr):
-        expr.left = rewrite_expr(expr.left, shift_map)
-        expr.right = rewrite_expr(expr.right, shift_map)
-    elif isinstance(expr, IfThenElseExpr):
-        expr.condition = rewrite_expr(expr.condition, shift_map)
-        expr.then_expr = rewrite_expr(expr.then_expr, shift_map)
-        expr.else_expr = rewrite_expr(expr.else_expr, shift_map)
-    elif isinstance(expr, IterVar):
-        if expr in shift_map:
-            expr = expr + shift_map[expr]
-            expr = expr_simpifier.simpify(expr)
-    return expr
+class RewriteIterVarVisitor(RewriteExprVisitor):
+    def __init__(self, map):
+        super().__init__()
+        self.map = map
+
+    def visit_iter_expr(self, expr):
+        if expr in self.map:
+            expr = self.map[expr]
+            expr = expr_simpifier.rewrite(expr)
+        return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
     shift = [bound.normalize() for bound in bounds]
+    for bound in bounds:
+        bound.end = expr_simpifier.rewrite(bound.end)
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.root_axis):
-        root_axis_to_shift[axis] = shift[i]
-    
+        root_axis_to_shift[axis] = axis + shift[i]
+        
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
-            provider.index = tuple([expr_simpifier.simpify(idx - shift[i]) for i, idx in enumerate(provider.index)])
+            provider.index = tuple([expr_simpifier.rewrite(idx - shift[i]) for i, idx in enumerate(provider.index)])
     
     if tensor.type != TensorExpr.PLACEHOLDER:
-        tensor.expr = rewrite_expr(tensor.expr, root_axis_to_shift)
+        visitor = RewriteIterVarVisitor(root_axis_to_shift)
+        tensor.expr = visitor.rewrite(tensor.expr)
+    return bounds
 
 def consolidate_range(a, b):
     return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=Range.CLOSED_CLOSED)
@@ -66,7 +63,9 @@ def infer_root_iter_bound(tensor, rmap):
                         bounds[i] = consolidate_range(bounds[i], new_bound)
         
         # step 3: normalize bounds
-        normalize_bound_and_rewrite_expr(tensor, bounds)
+        # for bound in bounds:
+        #     print(tensor.name, bound)
+        bounds = normalize_bound_and_rewrite_expr(tensor, bounds)
 
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
@@ -193,10 +192,8 @@ def evaluate_expr_bound(expr, rmap, relax_set):
         raise ValueError("Unsupported expr type {}".format(type(expr)))
     return interval
 
-def bound_simplify_and_bind(rmap, axis_sort):
+def bind_to_axis(rmap, axis_sort):
     for axis in axis_sort:
-        rmap[axis].start = expr_simpifier.simpify(rmap[axis].start)
-        rmap[axis].end = expr_simpifier.simpify(rmap[axis].end)
         axis.range = rmap[axis]
 
 def infer_bound_pass(tensors):
@@ -207,19 +204,23 @@ def infer_bound_pass(tensors):
         create_attach_path(tensor)
         infer_root_iter_bound(tensor, rmap)
         pass_down(rmap, axis_sort)
-        bound_simplify_and_bind(rmap, axis_sort)
+        bind_to_axis(rmap, axis_sort)
 
 
 def check_bound_pass(tensors):
     for tensor in tensors:
         is_safe = True
+        new_shape = []
         for idx, root_axis in enumerate(tensor.root_axis):
             # TODO: add boundary test, can prove?
             res = isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val
             if res:
                 # can decrease tensor size to save memory
-                tensor.shape[idx].val = root_axis.range.end.val
+                new_shape.append(root_axis.range.end)
+            else:
+                new_shape.append(tensor.shape[idx])
             is_safe = is_safe and res
+        tensor.shape = tuple(new_shape)
         tensor.is_safe = is_safe
                     
                 

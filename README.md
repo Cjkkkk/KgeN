@@ -27,6 +27,9 @@ A TVM-like CUDA code generator.
 - [x] change codegen to visitor pattern
 - [x] transform into stmts
 - [ ] tensor index flatten 
-- [ ] cache read
+- [x] cache read dataflow rewrite
+- [ ] cache read virtual thread
 - [ ] cache write
 - [x] move collect input as build graph pass
+- [ ] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
+- [ ] normalize single point or not?

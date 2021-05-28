@@ -66,8 +66,12 @@ class Expr:
             return ConstExpr(self.val * other.val)
         elif isinstance(self, ConstExpr) and self.val == 0:
             return ConstExpr(0)
+        elif isinstance(self, ConstExpr) and self.val == 1:
+            return other
         elif isinstance(other, ConstExpr) and other.val == 0:
             return ConstExpr(0)
+        elif isinstance(other, ConstExpr) and other.val == 1:
+            return self
         else:
             return BinaryExpr(self, other, Expr.MUL)
 
@@ -273,6 +277,9 @@ class Range:
         interval.is_single_point = True
         return interval
 
+    def __str__(self):
+        return "[{0}, {1} {2}".format(self.start, self.end, "]" if self.type == Range.CLOSED_CLOSED else ")")
+    
     def as_closed_open(self):
         if self.type == Range.CLOSED_CLOSED:
             self.type = Range.CLOSED_OPEN
@@ -304,7 +311,8 @@ class IterVar(Expr):
         self.bind_name = ""
 
     def __str__(self):
-        return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == Range.CLOSED_CLOSED else ")")
+        # return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == Range.CLOSED_CLOSED else ")")
+        return "{0}".format(self.name)
 
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
@@ -380,14 +388,16 @@ class TensorSliceExpr(Expr):
 class TensorExpr(Expr):
     PLACEHOLDER = 0
     COMPUTE = 1
-    def __init__(self, shape, name, tensor_type, compute_func=None, dtype="float"):
+    def __init__(self, shape, name, tensor_type, compute_func=None, dtype="float", scope="global"):
         super().__init__()
         self.shape = tuple([ConstExpr(s) if isinstance(s, int) else s for s in shape])
         self.name = name
         self.type = tensor_type
         self.compute_func = compute_func
         self.dtype = dtype
+        self.scope = scope
 
+        # compute at
         self.attached = False
         self.attach_at = None
         # is_safe == True means that no boundary test is needed
@@ -405,7 +415,6 @@ class TensorExpr(Expr):
         # tensor's attach_path, only used when compute_at
         # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
         self.attach_path = ()
-
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
 

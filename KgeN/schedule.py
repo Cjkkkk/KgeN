@@ -1,5 +1,6 @@
 from .te import compute
 from .tir import *
+from .visitor import RewriteExprVisitor
 import math
 
 # schedule primitives
@@ -80,21 +81,31 @@ def compute_at(tensor, attach_at, axis):
     tensor.attach_axis = axis
     axis.attached_computation.append(tensor)
 
+# rewrite dataflow for cache_read
+class RewriteDataFlowVisitor(RewriteExprVisitor):
+    def __init__(self, map):
+        super().__init__()
+        self.map = map
+
+    def visit_tensor_expr(self, expr):
+        if expr in self.map:
+            expr = self.map[expr]
+        return expr
+
 def cache_read(tensor, scope, readers):
     cache_tensor_name = tensor.name + "_" + scope
-    # TODO: fix lambda or directly insert expr to cache_tensor or copy?
-    cache_tensor = TensorExpr(tensor.shape, cache_tensor_name, TensorExpr.COMPUTE)
-    cache_tensor.expr = tensor[cache_tensor.root_axis]
-
-    # rewrite tensor's outputs
-    tensor.outputs = [output for output in tensor.outputs if output not in readers]
+    lambda_str = "def _ ({0}): return tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))
+    local_vars = {}
+    exec(lambda_str, {"tensor": tensor}, local_vars)
+    compiled = local_vars["_"]
+    cache_tensor = compute(tensor.shape, compiled, cache_tensor_name)
+    cache_tensor.scope = scope
 
     # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
     for reader in readers:
-        # TODO: rewrite expr of reader
-        pass
-
-
+        visitor = RewriteDataFlowVisitor({tensor: cache_tensor})
+        reader.expr = visitor.rewrite(reader.expr)
+    return cache_tensor
 
 def cache_write(tensor, scope):
     pass

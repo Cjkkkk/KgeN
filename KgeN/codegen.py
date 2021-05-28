@@ -8,49 +8,69 @@ from .schedule import *
 class CUDA_code_generator(Visitor):
     def __init__(self):
         self.scope = 0
+        self.res = ""
+
+    def emit(self, str):
+        self.res += self.scope * "    " + str + "\n"
     
+    def emit_newline(self):
+        self.res += "\n"
+
     def enter_scope(self):
         self.scope += 1
 
     def exit_scope(self):
         self.scope -= 1
     
-    def gen_signature(self, func_stmt):
-        return "void kernel({})".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors]))
+    def generate(self, func):
+        func.accept(self)
+        return self.res
+
+    def generate_signature(self, func_stmt):
+        self.emit("void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
+    
+    def generate_storage(self, func_stmt):
+        for tensor in func_stmt.tensors:
+            if tensor.scope == "global":
+                continue
+            elif tensor.scope == "local":
+                self.emit("{0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, tensor.shape)))
+            elif tensor.scope == "shared":
+                self.emit("__shared__ {0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, tensor.shape)))
     
     def visit_func_stmt(self, stmt):
-        res = ""
         for tensor in stmt.tensors:
-            res += "// tensor: {0}\n".format(TensorSliceExpr(tensor, tensor.shape))
-        res += self.gen_signature(stmt)
-        res += "{\n"
+            self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
+        
+        self.generate_signature(stmt)
         self.enter_scope()
-        res += "".join([st.accept(self) for st in stmt.body])
+        self.generate_storage(stmt)
+        
+        for st in stmt.body:
+            st.accept(self)
+        
         self.exit_scope()
-        res += "}\n"
-        return res
+        self.emit("}")
 
     def visit_assign_stmt(self, stmt):
-        return self.scope * "    " + stmt.dest.accept(self) + " = " + stmt.source.accept(self) + ";\n"
+        return self.emit(stmt.dest.accept(self) + " = " + stmt.source.accept(self) + ";")
     
     def visit_for_stmt(self, stmt):
-        ret = ""
         var = stmt.iter_var
         if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
-            ret = self.scope * "    " + "for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{\n".format(
+            self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{".format(
                 var.name, 
                 var.range.start.accept(self),
                 var.range.end.accept(self),
-                1)
+                1))
             self.enter_scope()
         
         for st in stmt.body:
-            ret += st.accept(self)
+            st.accept(self)
         
         if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
             self.exit_scope()
-            ret += self.scope * "    " + "}\n"
-        return ret
+            self.emit("}")
     
     def visit_binary_expr(self, expr):
         if expr.type > 9: # min, max
@@ -85,8 +105,24 @@ class CUDA_code_generator(Visitor):
         return "({0} ? {1} : {2})".format(expr.condition.accept(self), expr.then_expr.accept(self), expr.else_expr.accept(self))
     
     def visit_tensor_slice_expr(self, expr):
-        return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
+        def f(a, b):
+            return a * b
+        def scan(f, state, l):
+            res = []
+            for e in l:
+                state = f(state, e)
+                res.append(state)
+            return res
+        
+        prod = scan(f, ConstExpr(1), reversed(expr.tensor.shape[1:] + (ConstExpr(1),)))
+        prod = reversed(prod)
+        flatten_index = 0
+
+        for index, prod in zip(expr.index, prod):
+            flatten_index = flatten_index + index * prod
+        return expr.tensor.name + "[" + flatten_index.accept(self) + "]" 
+        # return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
 
 def CUDA_codegen_pass(func):
     code_generator = CUDA_code_generator()
-    return func.accept(code_generator)
+    return code_generator.generate(func)

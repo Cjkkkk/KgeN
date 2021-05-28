@@ -1,5 +1,5 @@
 from .tir import *
-from .visitor import Visitor
+from .visitor import RewriteExprVisitor
 
 class Pattern(Expr):
     def __init__(self, cls_):
@@ -26,6 +26,10 @@ class Pattern(Expr):
         return False
 
 def real_match(expr, pattern):
+    if isinstance(expr, IterVar):
+        # TODO: fix this
+        if expr.type == IterVar.SPLIT:
+            expr = expr.outer * expr.inner.range.end + expr.inner
     if isinstance(pattern, BinaryExpr):
         if isinstance(expr, BinaryExpr):
             if pattern.type != expr.type:
@@ -102,7 +106,10 @@ def reset_pattern(pattern):
         pattern.reset()
 
 
-class Expr_Simpifier(Visitor):       
+class ExprSimpifier(RewriteExprVisitor):  
+    def __init__(self):
+        super().__init__()
+         
     def visit_binary_expr(self, expr):
         # TODO: move this to __init__ ?
         C1 = Pattern(ConstExpr)
@@ -120,6 +127,8 @@ class Expr_Simpifier(Visitor):
                 expr = rewrite(expr, C1 + C2, C1 + C2)
             elif expr.type == Expr.SUB:
                 expr = rewrite(expr, (V1 + V2) - V1, V2)
+                expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
+                expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
                 expr = rewrite(expr, V1 - V1, ConstExpr(0))
             elif expr.type == Expr.MIN:
                 expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
@@ -150,35 +159,7 @@ class Expr_Simpifier(Visitor):
             else:
                 old_expr = expr
 
-    def visit_var_expr(self, expr):
-        return expr
-
-    def visit_const_expr(self, expr):
-        return expr
-
-    def visit_iter_expr(self, expr):
-        return expr
-
-    def visit_if_then_else_expr(self, expr):
-        expr.condition = expr.condition.accept(self)
-        expr.then_expr = expr.then_expr.accept(self)
-        expr.else_expr = expr.else_expr.accept(self)
-        return expr
-
-    def visit_tensor_expr(self, expr):
-        return expr
-
-    def visit_tensor_slice_expr(self, expr):
-        new_idx = []
-        for index in expr.index:
-            new_idx.append(index.accept(self))
-            expr.index = tuple(new_idx)
-        return expr
-
-    def simpify(self, expr):
-        return expr.accept(self)
-
-expr_simpifier = Expr_Simpifier()
+expr_simpifier = ExprSimpifier()
         
 if __name__ == "__main__":
     C1 = Pattern(ConstExpr)
