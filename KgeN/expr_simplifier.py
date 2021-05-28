@@ -29,7 +29,7 @@ def real_match(expr, pattern):
     if isinstance(expr, IterVar):
         # TODO: fix this
         if expr.type == IterVar.SPLIT:
-            expr = expr.outer * expr.inner.range.end + expr.inner
+            expr = expr.splitted_outer * expr.splitted_inner.range.end + expr.splitted_inner
     if isinstance(pattern, BinaryExpr):
         if isinstance(expr, BinaryExpr):
             if pattern.type != expr.type:
@@ -130,6 +130,9 @@ class ExprSimpifier(RewriteExprVisitor):
                 expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
                 expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
                 expr = rewrite(expr, V1 - V1, ConstExpr(0))
+            elif expr.type == Expr.MUL:
+                expr = rewrite(expr, (V1 + C1) * C2, V1 * C2 + C1 * C2)
+                expr = rewrite(expr, (V1 * C1) * C2, V1 * (C1 * C2))
             elif expr.type == Expr.MIN:
                 expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
                 expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)

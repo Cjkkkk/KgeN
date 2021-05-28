@@ -39,7 +39,7 @@ def tensor_topo_sort_bottom_up(tensor):
 def axis_topo_sort_top_down(axis_tuple):
     def get_output(axis):
         if axis.type == IterVar.SPLIT:
-            return [axis.outer, axis.inner]
+            return [axis.splitted_outer, axis.splitted_inner]
         elif axis.type == IterVar.FUSE:
             return [axis.fused]
         else:
@@ -49,10 +49,10 @@ def axis_topo_sort_top_down(axis_tuple):
 
 def axis_topo_sort_bottom_up(axis_tuple):
     def get_output(axis):
-        if axis.type == IterVar.NORMAL and hasattr(axis, "parent"):
-            return [axis.parent]
-        elif axis.type == IterVar.NORMAL and hasattr(axis, "outer"):
-            return [axis.outer, axis.inner]
+        if hasattr(axis, "splitted"):
+            return [axis.splitted]
+        elif hasattr(axis, "fused_outer"):
+            return [axis.fused_outer, axis.fused_inner]
         else:
             return []
     res = topo_sort(axis_tuple, get_output)

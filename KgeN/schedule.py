@@ -20,10 +20,10 @@ def split(tensor, ax, factor):
             outer = IterVar(axis.name + "_outer", -math.inf, math.inf)
             inner = IterVar(axis.name + "_inner", -math.inf, math.inf)
             
-            axis.outer = outer
-            axis.inner = inner
-            outer.parent = axis
-            inner.parent = axis
+            axis.splitted_outer = outer
+            axis.splitted_inner = inner
+            outer.splitted = axis
+            inner.splitted = axis
 
             axis.factor = factor
             axis.type = IterVar.SPLIT
@@ -62,8 +62,8 @@ def fuse(tensor, axis_tuple):
     axis_tuple[0].fused = fused
     axis_tuple[1].fused = fused
 
-    fused.outer = axis_tuple[0]
-    fused.inner = axis_tuple[1]
+    fused.fused_outer = axis_tuple[0]
+    fused.fused_inner = axis_tuple[1]
 
     for axis in tensor.axis:
         if axis is axis_tuple[0]:

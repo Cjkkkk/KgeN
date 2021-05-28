@@ -44,6 +44,7 @@ def infer_root_iter_bound(tensor, rmap):
             for axis in tensor.attach_path:
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
+        
         # step 2: calculate bound of producer
         for output in tensor.outputs:
             for provider in output.providers[tensor]:
@@ -66,7 +67,6 @@ def infer_root_iter_bound(tensor, rmap):
         # for bound in bounds:
         #     print(tensor.name, bound)
         bounds = normalize_bound_and_rewrite_expr(tensor, bounds)
-
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
             # convert back to closed_open interval
@@ -89,17 +89,18 @@ def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
             if rmap[axis].is_single_point:
-                rmap[axis.outer] = Range.single_point(axis.outer)
-                rmap[axis.inner] = Range.single_point(axis.inner)
+                rmap[axis.splitted_outer] = Range.single_point(axis.splitted_outer)
+                rmap[axis.splitted_inner] = Range.single_point(axis.splitted_inner)
             else:
-                rmap[axis.outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
-                rmap[axis.inner] = Range(0, axis.factor)
-        elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
-            if rmap[axis].is_single_point and rmap[axis.fused.inner].is_single_point:
+                rmap[axis.splitted_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
+                rmap[axis.splitted_inner] = Range(0, axis.factor)
+        elif axis.type == IterVar.FUSE and axis is axis.fused.fused_outer:
+            if rmap[axis].is_single_point and rmap[axis.fused.fused_inner].is_single_point:
                 rmap[axis.fused] = Range.single_point(axis.fused)
             else:
-                rmap[axis.fused] = Range(rmap[axis.fused.outer].start * axis.factor + rmap[axis.inner].start, 
-                                            rmap[axis.fused.outer].end * axis.factor + rmap[axis.inner].end)
+                # rmap[axis.fused] = Range(rmap[axis.fused.fused_outer].start * axis.factor + rmap[axis.fused.fused_inner].start, 
+                #                             rmap[axis.fused.fused_outer].end * axis.factor + rmap[axis.fused.fused_inner].end)
+                rmap[axis.fused] = evaluate_expr_bound(axis.fused.fused_outer * rmap[axis.fused.fused_inner].end + axis.fused.fused_inner, rmap, {})
         else:
             # we already know root_axis's range
             pass
@@ -108,18 +109,19 @@ def pass_down(rmap, axis_tuple):
 def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.type == IterVar.SPLIT:
-            if rmap[axis.outer].is_single_point and rmap[axis.inner].is_single_point:
+            if rmap[axis.splitted_outer].is_single_point and rmap[axis.splitted_inner].is_single_point:
                 rmap[axis] = Range.single_point(axis)
             else:
-                rmap[axis] = Range(rmap[axis.outer].start * axis.factor + rmap[axis.inner].start, 
-                                    rmap[axis.outer].end * axis.factor + rmap[axis.inner].end)
-        elif axis.type == IterVar.FUSE and axis is axis.fused.outer:
+                rmap[axis] = evaluate_expr_bound(axis.splitted_outer * axis.factor + axis.splitted_inner, rmap, {})
+                # rmap[axis] = Range(rmap[axis.splitted_outer].start * axis.factor + rmap[axis.splitted_inner].start, 
+                #                     rmap[axis.splitted_outer].end * axis.factor + rmap[axis.splitted_inner].end)
+        elif axis.type == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis.fused].is_single_point:
-                rmap[axis.fused.outer] = Range.single_point(axis.fused.outer)
-                rmap[axis.fused.inner] = Range.single_point(axis.fused.inner)
+                rmap[axis.fused.fused_outer] = Range.single_point(axis.fused.fused_outer)
+                rmap[axis.fused.fused_inner] = Range.single_point(axis.fused.fused_inner)
             else:
-                rmap[axis.fused.outer] = Range(rmap[axis.fused].start // axis.factor, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
-                rmap[axis.fused.inner] = Range(0, axis.factor)
+                rmap[axis.fused.fused_outer] = Range(rmap[axis.fused].start // axis.factor, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
+                rmap[axis.fused.fused_inner] = Range(0, axis.factor)
         else:
             pass
 
@@ -145,7 +147,7 @@ def create_attach_path(tensor):
 
 def evaluate_expr_bound(expr, rmap, relax_set):
     if isinstance(expr, IterVar):
-        if rmap[expr].is_single_point:
+        if rmap[expr].type == Range.CLOSED_CLOSED:
             interval = rmap[expr]
         else:
             # convert to closed closed interval
