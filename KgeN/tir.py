@@ -24,9 +24,6 @@ class Expr:
     CEIL_DIV = 12
     NEG = 13
     mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "-"]
-    
-    def __init__(self, *subexprs):
-        self.subexprs = subexprs
 
     def __add__(self, other):
         # TODO: add expr simpifier here
@@ -196,7 +193,7 @@ Expr.is_commutative = [True, True, False, False, False, False, False,
 
 class UnaryExpr(Expr):
     def __init__(self, expr, type_):
-        super().__init__(expr)
+        super().__init__()
         self.expr = expr
         self.type = type_
 
@@ -211,7 +208,7 @@ class UnaryExpr(Expr):
 
 class BinaryExpr(Expr):
     def __init__(self, left, right, type_):
-        super().__init__(left, right)
+        super().__init__()
         self.left = left
         self.right = right
         self.type = type_
@@ -341,7 +338,7 @@ class ReduceExpr(Expr):
 
 class IfThenElseExpr(Expr):
     def __init__(self, condition, then_expr, else_expr):
-        super().__init__(condition, then_expr, else_expr)
+        super().__init__()
         self.condition = wrap_number_as_const_expr(condition)
         self.then_expr = wrap_number_as_const_expr(then_expr)
         self.else_expr = wrap_number_as_const_expr(else_expr)
