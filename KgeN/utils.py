@@ -1,17 +1,22 @@
 from .tir import *
 
-
 def topo_sort(iterable, get_output):
     # Kahn's algorithm
     # calculate indegree map
     indegree_map = {}
+    visited = set()
     for node in iterable:
         indegree_map[node] = 0
-    nodes_list = [*iterable]
-    for node in nodes_list:
+        visited.add(node)
+    node_q = [*iterable]
+    
+    while len(node_q) > 0:
+        node = node_q.pop()
         out_nodes = get_output(node)
         for out_node in out_nodes:
-            nodes_list.append(out_node)
+            if out_node not in visited:
+                visited.add(out_node)
+                node_q.append(out_node)
             if out_node not in indegree_map:
                 indegree_map[out_node] = 1
             else:

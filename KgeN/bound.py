@@ -44,7 +44,8 @@ def infer_root_iter_bound(tensor, rmap):
             for axis in tensor.attach_path:
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
-        
+        # for axis in rmap:
+        #     print(axis, rmap[axis])
         # step 2: calculate bound of producer
         for output in tensor.outputs:
             for provider in output.providers[tensor]:
@@ -70,7 +71,8 @@ def infer_root_iter_bound(tensor, rmap):
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
             # convert back to closed_open interval
-            bounds[i].as_closed_open()
+            if not bounds[i].is_single_point:
+                bounds[i].as_closed_open()
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
         

@@ -34,13 +34,13 @@ class CUDA_code_generator(Visitor):
             if tensor.scope == "global":
                 continue
             elif tensor.scope == "local":
-                self.emit("{0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, tensor.shape)))
+                self.emit("{0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
             elif tensor.scope == "shared":
-                self.emit("__shared__ {0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, tensor.shape)))
+                self.emit("__shared__ {0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
     
     def visit_func_stmt(self, stmt):
         for tensor in stmt.tensors:
-            self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
+            self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
         
         self.generate_signature(stmt)
         self.enter_scope()
@@ -120,8 +120,8 @@ class CUDA_code_generator(Visitor):
 
         for index, prod in zip(expr.index, prod):
             flatten_index = flatten_index + index * prod
-        return expr.tensor.name + "[" + flatten_index.accept(self) + "]" 
-        # return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
+        # return expr.tensor.name + "[" + flatten_index.accept(self) + "]" 
+        return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
 
 def CUDA_codegen_pass(func):
     code_generator = CUDA_code_generator()
