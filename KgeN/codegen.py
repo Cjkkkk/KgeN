@@ -120,8 +120,8 @@ class CUDA_code_generator(Visitor):
 
         for index, prod in zip(expr.index, prod):
             flatten_index = flatten_index + index * prod
-        # return expr.tensor.name + "[" + flatten_index.accept(self) + "]" 
-        return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
+        return expr.tensor.name + "[" + flatten_index.accept(self) + "]" 
+        # return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
 
 def CUDA_codegen_pass(func):
     code_generator = CUDA_code_generator()
