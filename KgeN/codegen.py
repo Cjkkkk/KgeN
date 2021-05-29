@@ -34,9 +34,9 @@ class CUDA_code_generator(Visitor):
             if tensor.scope == "global":
                 continue
             elif tensor.scope == "local":
-                self.emit("{0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
+                self.emit("{0} {1};".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
             elif tensor.scope == "shared":
-                self.emit("__shared__ {0} {1}".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
+                self.emit("__shared__ {0} {1};".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
     
     def visit_func_stmt(self, stmt):
         for tensor in stmt.tensors:

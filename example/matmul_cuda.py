@@ -22,8 +22,25 @@ AA = KgeN.cache_read(A, "shared", [C])
 BB = KgeN.cache_read(B, "shared", [C])
 AAA = KgeN.cache_read(AA, "local", [C])
 BBB = KgeN.cache_read(BB, "local", [C])
-KgeN.compute_at(AA, C, By)
-KgeN.compute_at(BB, C, By)
+
+AM, AK = AA.axis
+BK, BN = BB.axis
+
+ATx, _ = KgeN.split(AA, AM, 4)
+ATy, _ = KgeN.split(AA, AK, 4)
+BTx, _ = KgeN.split(BB, BK, 4)
+BTy, _ = KgeN.split(BB, BN, 4)
+
+KgeN.compute_at(AA, C, Ko)
+KgeN.compute_at(BB, C, Ko)
 KgeN.compute_at(AAA, C, Ki)
 KgeN.compute_at(BBB, C, Ki)
+KgeN.bind(Bx, "blockIdx.x")
+KgeN.bind(By, "blockIdx.y")
+KgeN.bind(Tx, "threadIdx.x")
+KgeN.bind(Ty, "threadIdx.y")
+KgeN.bind(ATx, "threadIdx.x")
+KgeN.bind(ATy, "threadIdx.y")
+KgeN.bind(BTx, "threadIdx.x")
+KgeN.bind(BTy, "threadIdx.y")
 print(KgeN.lower(C))

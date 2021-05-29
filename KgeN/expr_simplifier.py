@@ -127,6 +127,7 @@ class ExprSimpifier(RewriteExprVisitor):
                 expr = rewrite(expr, C1 + C2, C1 + C2)
             elif expr.type == Expr.SUB:
                 expr = rewrite(expr, (V1 + V2) - V1, V2)
+                expr = rewrite(expr, (V1 + V2) - V2, V1)
                 expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
                 expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
                 expr = rewrite(expr, V1 - V1, ConstExpr(0))

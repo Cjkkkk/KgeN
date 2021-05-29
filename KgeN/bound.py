@@ -42,6 +42,10 @@ def infer_root_iter_bound(tensor, rmap):
         # step 1: do pass up for compute_at
         if len(tensor.attach_path) > 0: # not necessary but just for clearity
             for axis in tensor.attach_path:
+                if tensor.scope == "global" and axis.bind_name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+                    continue
+                if tensor.scope == "shared" and axis.bind_name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+                    continue
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
         # for axis in rmap:

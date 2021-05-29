@@ -8,7 +8,7 @@ def bind(ax, name):
     if name not in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
         raise ValueError("illegal binding name {}".format(name))
     ax.bind_type = IterVar.BIND
-    ax.name = name
+    ax.bind_name = name
 
 def split(tensor, ax, factor):
     if not isinstance(tensor, TensorExpr):
