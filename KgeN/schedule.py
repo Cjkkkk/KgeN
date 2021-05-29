@@ -108,4 +108,26 @@ def cache_read(tensor, scope, readers):
     return cache_tensor
 
 def cache_write(tensor, scope):
-    pass
+    cache_tensor_name = tensor.name + "_" + scope
+    cache_tensor = compute(tensor.shape, tensor.compute_func, cache_tensor_name)
+    cache_tensor.scope = scope
+
+
+    # change tensor's compute_func
+    lambda_str = "def _ ({0}): return cache_tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))
+    local_vars = {}
+    exec(lambda_str, {"cache_tensor": cache_tensor}, local_vars)
+    compiled = local_vars["_"]
+
+    tensor.compute_func = compiled
+    tensor.expr = compute_func(tensor.root_axis)
+
+    # TODO: what to do with reduce axis?
+    # remove tensor's reduce axis
+    tensor.reduce_axis = ()
+    all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
+    new_axis = [axis for axis in tensor.axis if axis not in all_reduce_axis]
+    tensor.axis = tuple(new_axis)
+
+    # TODO: what to do with attach information?
+    return cache_tensor
