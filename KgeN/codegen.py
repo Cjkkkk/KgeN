@@ -27,7 +27,7 @@ class CUDA_code_generator(Visitor):
         return self.res
 
     def generate_signature(self, func_stmt):
-        self.emit("void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
+        self.emit("__global__ void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
     
     def generate_tensor_shape(self, func_stmt):
         for tensor in func_stmt.tensors:
@@ -64,7 +64,7 @@ class CUDA_code_generator(Visitor):
             elif tensor.scope == "local":
                 self.emit("{0} {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
             elif tensor.scope == "shared":
-                self.emit("__shared__ {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
+                self.emit("__shared__ {0} {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
     
     def visit_func_stmt(self, stmt):
         self.generate_tensor_shape(stmt)
@@ -85,7 +85,7 @@ class CUDA_code_generator(Visitor):
     def visit_for_stmt(self, stmt):
         var = stmt.iter_var
         if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
-            self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3};) {{".format(
+            self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3}) {{".format(
                 var.name, 
                 var.range.start.accept(self),
                 var.range.end.accept(self),
