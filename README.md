@@ -33,7 +33,7 @@ A TVM-like CUDA code generator.
 - [x] move collect input as build graph pass
 - [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [x] normalize single point or not?
-
+- [ ] add expr simplify single point iter var as const expr
 
 # example
 ```
