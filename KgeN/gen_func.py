@@ -7,7 +7,6 @@ def add_reduce_init(tensor, fake_axis):
     init_axis = []
 
     if isinstance(tensor.expr, ReduceExpr):
-        print(tensor.name)
         # reduce expression
         all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
         first_reduce_idx = 0

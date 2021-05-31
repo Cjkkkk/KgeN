@@ -29,6 +29,33 @@ class CUDA_code_generator(Visitor):
     def generate_signature(self, func_stmt):
         self.emit("void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
     
+    def generate_tensor_shape(self, func_stmt):
+        for tensor in func_stmt.tensors:
+            self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
+    
+    def generate_lanuch_config(self, func_stmt):
+        # TODO: fix this: assume only one output
+        block_dim = {
+            "blockIdx.x": 1,
+            "blockIdx.y": 1, 
+            "blockIdx.z": 1
+        }
+        grid_dim = {
+            "threadIdx.x": 1, 
+            "threadIdx.y": 1,
+            "threadIdx.z": 1
+        }
+        output = func_stmt.tensors[0]
+        for axis in output.axis:
+            if axis.bind_type == IterVar.BIND:
+                if axis.bind_name in block_dim:
+                    block_dim[axis.bind_name] = axis.range.end.val
+                if axis.bind_name in grid_dim:
+                    grid_dim[axis.bind_name] = axis.range.end.val
+        
+        self.emit("// gridDim: [{0}, {1}, {2}]".format(*grid_dim.values()))
+        self.emit("// blockDim: [{0}, {1}, {2}]".format(*block_dim.values()))
+
     def generate_storage(self, func_stmt):
         from functools import reduce
         for tensor in func_stmt.tensors:
@@ -40,9 +67,8 @@ class CUDA_code_generator(Visitor):
                 self.emit("__shared__ {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
     
     def visit_func_stmt(self, stmt):
-        for tensor in stmt.tensors:
-            self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
-        
+        self.generate_tensor_shape(stmt)
+        self.generate_lanuch_config(stmt)
         self.generate_signature(stmt)
         self.enter_scope()
         self.generate_storage(stmt)

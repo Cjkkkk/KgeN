@@ -33,3 +33,64 @@ A TVM-like CUDA code generator.
 - [x] move collect input as build graph pass
 - [ ] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [ ] normalize single point or not?
+
+
+# example
+```
+python3 -m example.matmul_cache_write
+```
+
+```c
+// tensor: C[64, 64]
+// tensor: C_local[4, 4]
+// tensor: B_shared_local[1, 4]
+// tensor: B_shared[32, 16]
+// tensor: B[64, 64]
+// tensor: A_shared_local[4, 1]
+// tensor: A_shared[16, 32]
+// tensor: A[64, 64]
+// gridDim: [4, 4, 1]
+// blockDim: [4, 4, 1]
+void kernel(float* B, float* A, float* C) {
+    float C_local[16];
+    float B_shared_local[4];
+    __shared__ B_shared[512];
+    float A_shared_local[4];
+    __shared__ A_shared[512];
+    for (int C_local_i = 0; C_local_i < 4 ; C_local_i += 1;) {
+        for (int C_local_j = 0; C_local_j < 4 ; C_local_j += 1;) {
+            C_local[((C_local_i * 4) + C_local_j)] = 0;
+        }
+    }
+    for (int k_outer = 0; k_outer < 2 ; k_outer += 1;) {
+        for (int A_shared_i0_inner = 0; A_shared_i0_inner < 4 ; A_shared_i0_inner += 1;) {
+            for (int A_shared_i1_inner = 0; A_shared_i1_inner < 4 ; A_shared_i1_inner += 1;) {
+                A_shared[((((threadIdx.x * 4) + A_shared_i0_inner) * 32) + ((threadIdx.y * 4) + A_shared_i1_inner))] = A[(((((threadIdx.x * 4) + A_shared_i0_inner) + (blockIdx.x * 16)) * 64) + (((threadIdx.y * 4) + A_shared_i1_inner) + (k_outer * 32)))];
+            }
+        }
+        for (int B_shared_i0_inner = 0; B_shared_i0_inner < 4 ; B_shared_i0_inner += 1;) {
+            for (int B_shared_i1_inner = 0; B_shared_i1_inner < 4 ; B_shared_i1_inner += 1;) {
+                B_shared[((((threadIdx.x * 4) + B_shared_i0_inner) * 16) + ((threadIdx.y * 4) + B_shared_i1_inner))] = B[(((((threadIdx.x * 4) + B_shared_i0_inner) + (k_outer * 32)) * 64) + (((threadIdx.y * 4) + B_shared_i1_inner) + (blockIdx.y * 16)))];
+            }
+        }
+        for (int k_inner = 0; k_inner < 32 ; k_inner += 1;) {
+            for (int A_shared_local_i0 = 0; A_shared_local_i0 < 4 ; A_shared_local_i0 += 1;) {
+                A_shared_local[(A_shared_local_i0 + 0)] = A_shared[((((A_shared_local_i0 + (((blockIdx.x * 4) + threadIdx.x) * 4)) - (blockIdx.x * 16)) * 32) + ((0 + ((k_outer * 32) + k_inner)) - (k_outer * 32)))];
+            }
+            for (int B_shared_local_i1 = 0; B_shared_local_i1 < 4 ; B_shared_local_i1 += 1;) {
+                B_shared_local[((0 * 4) + B_shared_local_i1)] = B_shared[((((0 + ((k_outer * 32) + k_inner)) - (k_outer * 32)) * 16) + ((B_shared_local_i1 + (((blockIdx.y * 4) + threadIdx.y) * 4)) - (blockIdx.y * 16)))];
+            }
+            for (int C_local_i = 0; C_local_i < 4 ; C_local_i += 1;) {
+                for (int C_local_j = 0; C_local_j < 4 ; C_local_j += 1;) {
+                    C_local[((C_local_i * 4) + C_local_j)] = (C_local[((C_local_i * 4) + C_local_j)] + (A_shared_local[C_local_i] * B_shared_local[C_local_j]));
+                }
+            }
+        }
+    }
+    for (int C_i_inner = 0; C_i_inner < 4 ; C_i_inner += 1;) {
+        for (int C_j_inner = 0; C_j_inner < 4 ; C_j_inner += 1;) {
+            C[((((((blockIdx.x * 4) + threadIdx.x) * 4) + C_i_inner) * 64) + ((((blockIdx.y * 4) + threadIdx.y) * 4) + C_j_inner))] = C_local[((C_i_inner * 4) + C_j_inner)];
+        }
+    }
+}
+```
