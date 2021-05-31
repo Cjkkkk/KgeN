@@ -35,6 +35,7 @@ A TVM-like CUDA code generator.
 - [x] normalize single point or not?
 - [ ] add expr simplify single point iter var as const expr
 - [ ] add sync_threads()
+
 # example
 ```
 python3 -m example.matmul_cache_write
