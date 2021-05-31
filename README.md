@@ -34,7 +34,7 @@ A TVM-like CUDA code generator.
 - [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [x] normalize single point or not?
 - [ ] add expr simplify single point iter var as const expr
-
+- [ ] add sync_threads()
 # example
 ```
 python3 -m example.matmul_cache_write
