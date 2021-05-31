@@ -1,8 +1,10 @@
 from .te import compute
 from .tir import *
 from .visitor import RewriteExprVisitor
+from .utils import axis_topo_sort_top_down
 import math
 
+global_cache_map = {}
 # schedule primitives
 def bind(ax, name):
     if name not in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
@@ -101,17 +103,25 @@ def cache_read(tensor, scope, readers):
     cache_tensor = compute(tensor.shape, compiled, cache_tensor_name)
     cache_tensor.scope = scope
 
+    global_cache_map[tensor] = cache_tensor
+    for k, v in global_cache_map.items():
+        if tensor is v:
+            global_cache_map[k] = cache_tensor
+    
     # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
     for reader in readers:
-        visitor = RewriteDataFlowVisitor({tensor: cache_tensor})
+        visitor = RewriteDataFlowVisitor(global_cache_map)
         reader.expr = visitor.rewrite(reader.expr)
     return cache_tensor
 
 def cache_write(tensor, scope):
+    # TODO: fix compute, use local
     cache_tensor_name = tensor.name + "_" + scope
     cache_tensor = compute(tensor.shape, tensor.compute_func, cache_tensor_name)
     cache_tensor.scope = scope
-
+    visitor = RewriteDataFlowVisitor(global_cache_map)
+    cache_tensor.expr = visitor.rewrite(cache_tensor.expr)
+    
 
     # change tensor's compute_func
     lambda_str = "def _ ({0}): return cache_tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))
@@ -120,13 +130,13 @@ def cache_write(tensor, scope):
     compiled = local_vars["_"]
 
     tensor.compute_func = compiled
-    tensor.expr = compute_func(tensor.root_axis)
+    tensor.expr = tensor.compute_func(*tensor.root_axis)
 
     # TODO: what to do with reduce axis?
     # remove tensor's reduce axis
-    tensor.reduce_axis = ()
     all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
     new_axis = [axis for axis in tensor.axis if axis not in all_reduce_axis]
+    tensor.reduce_axis = ()
     tensor.axis = tuple(new_axis)
 
     # TODO: what to do with attach information?

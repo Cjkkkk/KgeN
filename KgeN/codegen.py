@@ -1,4 +1,4 @@
-from .utils import tensor_topo_sort_bottom_up, axis_topo_sort_top_down
+from .utils import tensor_topo_sort_bottom_up, axis_topo_sort_top_down, index_flatten
 from .tir import *
 from .visitor import Visitor
 from .te import *
@@ -30,13 +30,14 @@ class CUDA_code_generator(Visitor):
         self.emit("void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
     
     def generate_storage(self, func_stmt):
+        from functools import reduce
         for tensor in func_stmt.tensors:
             if tensor.scope == "global":
                 continue
             elif tensor.scope == "local":
-                self.emit("{0} {1};".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
+                self.emit("{0} {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
             elif tensor.scope == "shared":
-                self.emit("__shared__ {0} {1};".format(tensor.dtype, TensorSliceExpr(tensor, [s for s in tensor.shape if not isinstance(s, ConstExpr) or s.val != 0])))
+                self.emit("__shared__ {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
     
     def visit_func_stmt(self, stmt):
         for tensor in stmt.tensors:
@@ -105,21 +106,7 @@ class CUDA_code_generator(Visitor):
         return "({0} ? {1} : {2})".format(expr.condition.accept(self), expr.then_expr.accept(self), expr.else_expr.accept(self))
     
     def visit_tensor_slice_expr(self, expr):
-        def f(a, b):
-            return a * b
-        def scan(f, state, l):
-            res = []
-            for e in l:
-                state = f(state, e)
-                res.append(state)
-            return res
-        
-        prod = scan(f, ConstExpr(1), reversed(expr.tensor.shape[1:] + (ConstExpr(1),)))
-        prod = reversed(prod)
-        flatten_index = 0
-
-        for index, prod in zip(expr.index, prod):
-            flatten_index = flatten_index + index * prod
+        flatten_index = index_flatten(expr.index, expr.tensor.shape)
         return expr.tensor.name + "[" + flatten_index.accept(self) + "]" 
         # return expr.tensor.name + "[" + ", ".join([index.accept(self) for index in expr.index]) + "]" 
 

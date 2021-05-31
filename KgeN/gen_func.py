@@ -7,22 +7,19 @@ def add_reduce_init(tensor, fake_axis):
     init_axis = []
 
     if isinstance(tensor.expr, ReduceExpr):
+        print(tensor.name)
         # reduce expression
         all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
-        all_regular_axis = set(axis_topo_sort_top_down(tensor.root_axis))
-        min_reduce_axis_idx = len(tensor.axis)
+        first_reduce_idx = 0
         for idx, axis in enumerate(tensor.axis):
             if axis in all_reduce_axis:
-                min_reduce_axis_idx = idx
+                first_reduce_idx = idx
                 break
-        for idx, axis in enumerate(reversed(tensor.axis)):
-            if axis in all_regular_axis:
-                if idx > min_reduce_axis_idx:
-                    attach_axis = axis
-                    break
-                else:
-                    init_axis.append(axis)
-        
+            else:
+                attach_axis = axis
+        for axis in tensor.axis[first_reduce_idx + 1:]:
+            if axis not in all_reduce_axis:
+                init_axis.append(axis)
         # TODO: fix this, use te.compute
         import copy
         init = copy.copy(tensor)

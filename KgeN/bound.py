@@ -1,6 +1,7 @@
 from .utils import *
 from .visitor import RewriteExprVisitor
 from .expr_simplifier import expr_simpifier
+from .tir import Range
 
 # bound inference
 class RewriteIterVarVisitor(RewriteExprVisitor):
@@ -224,7 +225,7 @@ def check_bound_pass(tensors):
             res = isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val
             if res:
                 # can decrease tensor size to save memory
-                new_shape.append(root_axis.range.end)
+                new_shape.append(root_axis.range.end + 1 if root_axis.range.type == Range.CLOSED_CLOSED else root_axis.range.end)
             else:
                 new_shape.append(tensor.shape[idx])
             is_safe = is_safe and res

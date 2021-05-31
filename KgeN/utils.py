@@ -62,3 +62,21 @@ def axis_topo_sort_bottom_up(axis_tuple):
             return []
     res = topo_sort(axis_tuple, get_output)
     return res
+
+def index_flatten(index, shape):
+    def f(a, b):
+        return a * b
+    def scan(f, state, l):
+        res = []
+        for e in l:
+            state = f(state, e)
+            res.append(state)
+        return res
+    
+    prod = scan(f, ConstExpr(1), reversed(shape[1:] + (ConstExpr(1),)))
+    prod = reversed(prod)
+    flatten_index = 0
+
+    for index, prod in zip(index, prod):
+        flatten_index = flatten_index + index * prod
+    return flatten_index
