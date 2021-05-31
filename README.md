@@ -26,13 +26,13 @@ A TVM-like CUDA code generator.
 - [x] fix recursive attach path
 - [x] change codegen to visitor pattern
 - [x] transform into stmts
-- [ ] tensor index flatten 
+- [x] tensor index flatten 
 - [x] cache read dataflow rewrite
 - [ ] cache read virtual thread and reduce axis
-- [ ] cache write
+- [x] cache write
 - [x] move collect input as build graph pass
-- [ ] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
-- [ ] normalize single point or not?
+- [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
+- [x] normalize single point or not?
 
 
 # example
