@@ -27,8 +27,8 @@ KgeN.reorder(C, (Bx, By, Tx, Ty, Mi, Ni))
 AM, AK = AA.axis
 BK, BN = BB.axis
 ATx, _ = KgeN.split(AA, AM, 4)
-ATy, _ = KgeN.split(AA, AK, 4)
-BTx, _ = KgeN.split(BB, BK, 4)
+ATy, _ = KgeN.split(AA, AK, 8)
+BTx, _ = KgeN.split(BB, BK, 8)
 BTy, _ = KgeN.split(BB, BN, 4)
 
 M, N, K = CCC.axis

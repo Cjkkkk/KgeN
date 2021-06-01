@@ -65,13 +65,13 @@ __global__ void kernel(float* B, float* A, float* C) {
     }
     for (int k_outer = 0; k_outer < 2 ; k_outer += 1) {
         for (int A_shared_i0_inner = 0; A_shared_i0_inner < 4 ; A_shared_i0_inner += 1) {
-            for (int A_shared_i1_inner = 0; A_shared_i1_inner < 4 ; A_shared_i1_inner += 1) {
-                A_shared[((((threadIdx.x * 4) + A_shared_i0_inner) * 32) + ((threadIdx.y * 4) + A_shared_i1_inner))] = A[(((((threadIdx.x * 4) + A_shared_i0_inner) + (blockIdx.x * 16)) * 64) + (((threadIdx.y * 4) + A_shared_i1_inner) + (k_outer * 32)))];
+            for (int A_shared_i1_inner = 0; A_shared_i1_inner < 8 ; A_shared_i1_inner += 1) {
+                A_shared[((((threadIdx.x * 4) + A_shared_i0_inner) * 32) + ((threadIdx.y * 8) + A_shared_i1_inner))] = A[(((((threadIdx.x * 4) + A_shared_i0_inner) + (blockIdx.x * 16)) * 64) + (((threadIdx.y * 8) + A_shared_i1_inner) + (k_outer * 32)))];
             }
         }
-        for (int B_shared_i0_inner = 0; B_shared_i0_inner < 4 ; B_shared_i0_inner += 1) {
+        for (int B_shared_i0_inner = 0; B_shared_i0_inner < 8 ; B_shared_i0_inner += 1) {
             for (int B_shared_i1_inner = 0; B_shared_i1_inner < 4 ; B_shared_i1_inner += 1) {
-                B_shared[((((threadIdx.x * 4) + B_shared_i0_inner) * 16) + ((threadIdx.y * 4) + B_shared_i1_inner))] = B[(((((threadIdx.x * 4) + B_shared_i0_inner) + (k_outer * 32)) * 64) + (((threadIdx.y * 4) + B_shared_i1_inner) + (blockIdx.y * 16)))];
+                B_shared[((((threadIdx.x * 8) + B_shared_i0_inner) * 16) + ((threadIdx.y * 4) + B_shared_i1_inner))] = B[(((((threadIdx.x * 8) + B_shared_i0_inner) + (k_outer * 32)) * 64) + (((threadIdx.y * 4) + B_shared_i1_inner) + (blockIdx.y * 16)))];
             }
         }
         for (int k_inner = 0; k_inner < 32 ; k_inner += 1) {
