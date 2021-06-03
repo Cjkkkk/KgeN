@@ -307,7 +307,7 @@ class IterVar(Expr):
         self.type = IterVar.NORMAL
         self.bind_type = IterVar.NONE
         self.bind_name = ""
-
+    
     def __str__(self):
         # return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == Range.CLOSED_CLOSED else ")")
         return "{0}".format(self.name)
@@ -463,6 +463,8 @@ class ForStmt(Stmt):
         super().__init__()
         self.iter_var = iter_var
         self.body = []
+        self.need_sync_before = False
+        self.need_sync_after = False
     
     def accept(self, visitor):
         return visitor.visit_for_stmt(self)

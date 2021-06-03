@@ -34,7 +34,7 @@ A TVM-like CUDA code generator.
 - [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [x] normalize single point or not?
 - [ ] add expr simplify single point iter var as const expr
-- [ ] add sync_threads()
+- [x] add sync_threads()
 
 # example
 ```
@@ -74,6 +74,7 @@ __global__ void kernel(float* B, float* A, float* C) {
                 B_shared[((((threadIdx.x * 8) + B_shared_i0_inner) * 16) + ((threadIdx.y * 4) + B_shared_i1_inner))] = B[(((((threadIdx.x * 8) + B_shared_i0_inner) + (k_outer * 32)) * 64) + (((threadIdx.y * 4) + B_shared_i1_inner) + (blockIdx.y * 16)))];
             }
         }
+        __syncthreads();
         for (int k_inner = 0; k_inner < 32 ; k_inner += 1) {
             for (int A_shared_local_i0 = 0; A_shared_local_i0 < 4 ; A_shared_local_i0 += 1) {
                 A_shared_local[(A_shared_local_i0 + 0)] = A_shared[((((A_shared_local_i0 + (((blockIdx.x * 4) + threadIdx.x) * 4)) - (blockIdx.x * 16)) * 32) + ((0 + ((k_outer * 32) + k_inner)) - (k_outer * 32)))];
@@ -87,6 +88,7 @@ __global__ void kernel(float* B, float* A, float* C) {
                 }
             }
         }
+        __syncthreads();
     }
     for (int C_i_inner = 0; C_i_inner < 4 ; C_i_inner += 1) {
         for (int C_j_inner = 0; C_j_inner < 4 ; C_j_inner += 1) {

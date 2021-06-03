@@ -84,6 +84,8 @@ class CUDA_code_generator(Visitor):
     
     def visit_for_stmt(self, stmt):
         var = stmt.iter_var
+        if stmt.need_sync_before:
+            self.emit("__syncthreads();")
         if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
             self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3}) {{".format(
                 var.name, 
@@ -98,6 +100,8 @@ class CUDA_code_generator(Visitor):
         if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
             self.exit_scope()
             self.emit("}")
+        if stmt.need_sync_after:
+            self.emit("__syncthreads();")
     
     def visit_binary_expr(self, expr):
         if expr.type > 9: # min, max

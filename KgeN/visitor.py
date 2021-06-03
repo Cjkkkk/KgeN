@@ -87,7 +87,7 @@ class RewriteExprVisitor(Visitor):
         return expr
 
 
-class CollectVisitor(Visitor):
+class CollectExprVisitor(Visitor):
     def __init__(self):
         super().__init__()
 
