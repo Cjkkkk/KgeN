@@ -47,7 +47,7 @@ class CUDA_code_generator(Visitor):
         }
         output = func_stmt.tensors[0]
         for axis in output.axis:
-            if axis.bind_type == IterVar.BIND:
+            if axis.type == IterVar.BIND:
                 if axis.bind_name in block_dim:
                     block_dim[axis.bind_name] = axis.range.end.val
                 if axis.bind_name in grid_dim:
@@ -86,7 +86,7 @@ class CUDA_code_generator(Visitor):
         var = stmt.iter_var
         if stmt.need_sync_before:
             self.emit("__syncthreads();")
-        if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
+        if not var.range.is_single_point and not var.type == IterVar.BIND:
             self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3}) {{".format(
                 var.name, 
                 var.range.start.accept(self),
@@ -97,7 +97,7 @@ class CUDA_code_generator(Visitor):
         for st in stmt.body:
             st.accept(self)
         
-        if not var.range.is_single_point and not var.bind_type == IterVar.BIND:
+        if not var.range.is_single_point and not var.type == IterVar.BIND:
             self.exit_scope()
             self.emit("}")
         if stmt.need_sync_after:
@@ -120,11 +120,11 @@ class CUDA_code_generator(Visitor):
     def visit_iter_expr(self, expr):
         if expr.range.is_single_point:
             return expr.range.start.accept(self)
-        elif expr.bind_type == IterVar.BIND:
+        elif expr.type == IterVar.BIND:
             return expr.bind_name
-        elif expr.type == IterVar.SPLIT:
+        elif expr.relation == IterVar.SPLIT:
             return "(({0} * {1}) + {2})".format(expr.splitted_outer.accept(self), expr.splitted_inner.range.end.accept(self), expr.splitted_inner.accept(self))
-        elif expr.type == IterVar.FUSE:
+        elif expr.relation == IterVar.FUSE:
             if expr is expr.fused.fused_outer:
                 return "({0} // {1})".format(expr.fused.accept(self), expr.fused.fused_inner.range.end.accept(self))
             else:

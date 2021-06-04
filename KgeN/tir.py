@@ -192,10 +192,10 @@ Expr.is_commutative = [True, True, False, False, False, False, False,
         False, False, False, True, True, False, False]
 
 class UnaryExpr(Expr):
-    def __init__(self, expr, type_):
+    def __init__(self, expr, type):
         super().__init__()
         self.expr = expr
-        self.type = type_
+        self.type = type
 
     def __str__(self):
         return "({0}({1}))".format(Expr.mapping[self.type], self.expr)
@@ -207,11 +207,11 @@ class UnaryExpr(Expr):
         return visitor.visit_unary_expr(self)
 
 class BinaryExpr(Expr):
-    def __init__(self, left, right, type_):
+    def __init__(self, left, right, type):
         super().__init__()
         self.left = left
         self.right = right
-        self.type = type_
+        self.type = type
 
     def __str__(self):
         if self.type > 9: # min, max
@@ -258,11 +258,11 @@ class ConstExpr(Expr):
 class Range:
     CLOSED_OPEN = 0
     CLOSED_CLOSED = 1
-    def __init__(self, start, end, type_= CLOSED_OPEN):
+    def __init__(self, start, end, type=CLOSED_OPEN):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
         self.is_single_point = False
-        self.type = type_
+        self.type = type
 
         if self.type == Range.CLOSED_CLOSED and self.start.same_as(self.end):
             # TODO: fix this, should be done at runtime
@@ -297,15 +297,18 @@ class IterVar(Expr):
     SPLIT = 1
     FUSE = 2
 
-    NONE = 3
+    DEFAULT = 3
     BIND = 4
-    def __init__(self, name, start=0, end=0, type_= Range.CLOSED_OPEN):
+    VECTORIZED=5
+    UNROLL=6
+    REDUCE=7
+    def __init__(self, name, start=0, end=0, type=Range.CLOSED_OPEN):
         super().__init__()
         self.name = name
-        self.range = Range(start, end, type_)
+        self.range = Range(start, end, type)
         self.attached_computation = []
-        self.type = IterVar.NORMAL
-        self.bind_type = IterVar.NONE
+        self.relation = IterVar.NORMAL
+        self.type = IterVar.DEFAULT
         self.bind_name = ""
     
     def __str__(self):
@@ -325,7 +328,12 @@ class ReduceExpr(Expr):
         self.combinator = wrap_number_as_const_expr(combinator)
         self.init = wrap_number_as_const_expr(init)
         self.expr = wrap_number_as_const_expr(expr)
-        self.reduce_axis = axis if isinstance(axis, tuple) else (axis, )
+        axis_tuple = axis if isinstance(axis, tuple) else (axis, )
+        
+        for axis in axis_tuple:
+            if axis.type != IterVar.REDUCE:
+                raise ValueError("axis {0} must be reduce axis.".format(axis.name))
+        self.reduce_axis = axis_tuple
     
     def __str__(self):
         raise NotImplementedError

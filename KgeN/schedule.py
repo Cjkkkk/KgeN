@@ -5,11 +5,12 @@ from .utils import axis_topo_sort_top_down
 import math
 
 global_cache_map = {}
+
 # schedule primitives
 def bind(ax, name):
     if name not in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
         raise ValueError("illegal binding name {}".format(name))
-    ax.bind_type = IterVar.BIND
+    ax.type = IterVar.BIND
     ax.bind_name = name
 
 def split(tensor, ax, factor):
@@ -28,7 +29,7 @@ def split(tensor, ax, factor):
             inner.splitted = axis
 
             axis.factor = factor
-            axis.type = IterVar.SPLIT
+            axis.relation = IterVar.SPLIT
             new_axis.append(outer)
             new_axis.append(inner)
         else:
@@ -58,8 +59,8 @@ def fuse(tensor, axis_tuple):
     # set axis to fuse
     fused = IterVar(axis_tuple[0].name + "_" + axis_tuple[1].name + "_fused", -math.inf, math.inf)
     
-    axis_tuple[0].type = IterVar.FUSE
-    axis_tuple[1].type = IterVar.FUSE
+    axis_tuple[0].relation = IterVar.FUSE
+    axis_tuple[1].relation = IterVar.FUSE
     
     axis_tuple[0].fused = fused
     axis_tuple[1].fused = fused
@@ -76,7 +77,13 @@ def fuse(tensor, axis_tuple):
             new_axis.append(axis)
     tensor.axis = new_axis
     return fused
-    
+
+def vectorize(tensor, axis):
+    axis.type = IterVar.VECTORIZED
+
+def unroll(tensor, axis):
+    axis.type = IterVar.UNROLL
+
 def compute_at(tensor, attach_at, axis):
     tensor.attached = True
     tensor.attach_at = attach_at

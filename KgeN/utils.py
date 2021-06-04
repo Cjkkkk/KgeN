@@ -43,9 +43,9 @@ def tensor_topo_sort_bottom_up(tensor):
 
 def axis_topo_sort_top_down(axis_tuple):
     def get_output(axis):
-        if axis.type == IterVar.SPLIT:
+        if axis.relation == IterVar.SPLIT:
             return [axis.splitted_outer, axis.splitted_inner]
-        elif axis.type == IterVar.FUSE:
+        elif axis.relation == IterVar.FUSE:
             return [axis.fused]
         else:
             return []

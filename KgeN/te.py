@@ -28,4 +28,5 @@ def reduce_min(expr, axis):
 
 def reduce_axis(end, name):
     axis = IterVar(name, 0, end)
+    axis.type = IterVar.REDUCE
     return axis

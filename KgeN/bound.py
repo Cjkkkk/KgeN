@@ -35,7 +35,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     return bounds
 
 def consolidate_range(a, b):
-    return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type_=Range.CLOSED_CLOSED)
+    return Range(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type=Range.CLOSED_CLOSED)
 
 def infer_root_iter_bound(tensor, rmap):
     if len(tensor.outputs) > 0:
@@ -94,14 +94,14 @@ def infer_root_iter_bound(tensor, rmap):
 
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
-        if axis.type == IterVar.SPLIT:
+        if axis.relation == IterVar.SPLIT:
             if rmap[axis].is_single_point:
                 rmap[axis.splitted_outer] = Range.single_point(axis.splitted_outer)
                 rmap[axis.splitted_inner] = Range.single_point(axis.splitted_inner)
             else:
                 rmap[axis.splitted_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
                 rmap[axis.splitted_inner] = Range(0, axis.factor)
-        elif axis.type == IterVar.FUSE and axis is axis.fused.fused_outer:
+        elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis].is_single_point and rmap[axis.fused.fused_inner].is_single_point:
                 rmap[axis.fused] = Range.single_point(axis.fused)
             else:
@@ -115,14 +115,14 @@ def pass_down(rmap, axis_tuple):
 
 def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
-        if axis.type == IterVar.SPLIT:
+        if axis.relation == IterVar.SPLIT:
             if rmap[axis.splitted_outer].is_single_point and rmap[axis.splitted_inner].is_single_point:
                 rmap[axis] = Range.single_point(axis)
             else:
                 rmap[axis] = evaluate_expr_bound(axis.splitted_outer * axis.factor + axis.splitted_inner, rmap, {})
                 # rmap[axis] = Range(rmap[axis.splitted_outer].start * axis.factor + rmap[axis.splitted_inner].start, 
                 #                     rmap[axis.splitted_outer].end * axis.factor + rmap[axis.splitted_inner].end)
-        elif axis.type == IterVar.FUSE and axis is axis.fused.fused_outer:
+        elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis.fused].is_single_point:
                 rmap[axis.fused.fused_outer] = Range.single_point(axis.fused.fused_outer)
                 rmap[axis.fused.fused_inner] = Range.single_point(axis.fused.fused_inner)
@@ -158,33 +158,33 @@ def evaluate_expr_bound(expr, rmap, relax_set):
             interval = rmap[expr]
         else:
             # convert to closed closed interval
-            interval = Range(rmap[expr].start, rmap[expr].end - 1, type_= Range.CLOSED_CLOSED)
+            interval = Range(rmap[expr].start, rmap[expr].end - 1, type=Range.CLOSED_CLOSED)
         if expr in relax_set:
-            interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type_= Range.CLOSED_CLOSED)
+            interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type=Range.CLOSED_CLOSED)
     
     elif isinstance(expr, BinaryExpr):
         left = evaluate_expr_bound(expr.left, rmap, relax_set)
         right = evaluate_expr_bound(expr.right, rmap, relax_set)
         if expr.type == Expr.ADD:
-            interval = Range(left.start + right.start, left.end + right.end, type_= Range.CLOSED_CLOSED)
+            interval = Range(left.start + right.start, left.end + right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.SUB:
-            interval = Range(left.start - right.start, left.end - right.end, type_= Range.CLOSED_CLOSED)
+            interval = Range(left.start - right.start, left.end - right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.MUL:
-            interval = Range(left.start * right.start, left.end * right.end, type_= Range.CLOSED_CLOSED)
+            interval = Range(left.start * right.start, left.end * right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.FLOOR_DIV:
-            interval = Range(left.start // right.start, left.end // right.end, type_= Range.CLOSED_CLOSED)
+            interval = Range(left.start // right.start, left.end // right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.MOD:
-            interval = Range(left.start % right.start, left.end % right.end, type_= Range.CLOSED_CLOSED)
+            interval = Range(left.start % right.start, left.end % right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.MIN:
-            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type_= Range.CLOSED_CLOSED)
+            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.MAX:
-            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type_= Range.CLOSED_CLOSED)
+            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type=Range.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported op type {}.".format(expr.type))
     elif isinstance(expr, UnaryExpr):
         if expr.type == Expr.NEG:
             inner = evaluate_expr_bound(expr.expr, rmap, relax_set)
-            interval = Range(- inner.end, - inner.start, type_= Range.CLOSED_CLOSED)
+            interval = Range(- inner.end, - inner.start, type=Range.CLOSED_CLOSED)
         else:
             raise ValueError("Unsupported op type {}.".format(expr.type))
     elif isinstance(expr, IfThenElseExpr):
