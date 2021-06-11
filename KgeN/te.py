@@ -13,7 +13,14 @@ def compute(shape, function, name):
 
 def if_then_else(condition, then_expr, else_expr):
     return IfThenElseExpr(condition, then_expr, else_expr)
-   
+
+def all(*condition):
+    assert(len(condition) > 1, "provide at least two condition, got {}".format(len(condition)))
+    expr = condition[0]
+    for condition in condition[1:]:
+        expr = Expr.and_(expr, condition)
+    return expr
+
 def reduce_sum(expr, axis):
     combinator = lambda x, y: x + y
     return ReduceExpr(combinator, 0, expr, axis)

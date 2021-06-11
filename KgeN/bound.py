@@ -98,8 +98,12 @@ def pass_down(rmap, axis_tuple):
                 rmap[axis.split_outer] = Range.single_point(axis.split_outer)
                 rmap[axis.split_inner] = Range.single_point(axis.split_inner)
             else:
-                rmap[axis.split_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
-                rmap[axis.split_inner] = Range(0, axis.factor)
+                if axis.factor != -1:
+                    rmap[axis.split_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
+                    rmap[axis.split_inner] = Range(0, axis.factor)
+                else:
+                    rmap[axis.split_outer] = Range(0, axis.nparts)
+                    rmap[axis.split_inner] = Range(0, Expr.ceildiv(rmap[axis].end, axis.nparts))
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis].is_single_point and rmap[axis.fused.fused_inner].is_single_point:
                 rmap[axis.fused] = Range.single_point(axis.fused)
@@ -118,7 +122,7 @@ def pass_up(rmap, axis_tuple):
             if rmap[axis.split_outer].is_single_point and rmap[axis.split_inner].is_single_point:
                 rmap[axis] = Range.single_point(axis)
             else:
-                rmap[axis] = evaluate_expr_bound(axis.split_outer * axis.factor + axis.split_inner, rmap, {})
+                rmap[axis] = evaluate_expr_bound(axis.split_outer * axis.split_inner.end + axis.split_inner, rmap, {})
                 # rmap[axis] = Range(rmap[axis.split_outer].start * axis.factor + rmap[axis.split_inner].start, 
                 #                     rmap[axis.split_outer].end * axis.factor + rmap[axis.split_inner].end)
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:

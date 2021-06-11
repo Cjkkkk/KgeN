@@ -15,15 +15,15 @@ A = KgeN.placeholder((in_size, in_size, in_channel, batch), name="A")
 W = KgeN.placeholder((kernel, kernel, in_channel, out_channel), name="W")
 out_size = (in_size - kernel + 2 * pad) // stride + 1
 # Pad input
-# Apad = KgeN.compute(
-#     (in_size + 2 * pad, in_size + 2 * pad, in_channel, batch),
-#     lambda yy, xx, cc, nn: KgeN.if_then_else(
-#         KgeN.all(yy >= pad, yy - pad < in_size, xx >= pad, xx - pad < in_size),
-#         A[yy - pad, xx - pad, cc, nn],
-#         0,
-#     ),
-#     name="Apad",
-# )
+Apad = KgeN.compute(
+    (in_size + 2 * pad, in_size + 2 * pad, in_channel, batch),
+    lambda yy, xx, cc, nn: KgeN.if_then_else(
+        KgeN.all(yy >= pad, yy - pad < in_size, xx >= pad, xx - pad < in_size),
+        A[yy - pad, xx - pad, cc, nn],
+        0,
+    ),
+    name="Apad",
+)
 # Create reduction variables
 rc = KgeN.reduce_axis(in_channel, name="rc")
 ry = KgeN.reduce_axis(kernel, name="ry")
@@ -32,13 +32,13 @@ rx = KgeN.reduce_axis(kernel, name="rx")
 B = KgeN.compute(
     (out_size, out_size, out_channel, batch),
     lambda yy, xx, ff, nn: KgeN.reduce_sum(
-        A[yy * stride + ry, xx * stride + rx, rc, nn] * W[ry, rx, rc, ff], axis=(ry, rx, rc)
+        Apad[yy * stride + ry, xx * stride + rx, rc, nn] * W[ry, rx, rc, ff], axis=(ry, rx, rc)
     ),
     name="B",
 )
 
 
-AA = KgeN.cache_read(A, "shared", [B])
+AA = KgeN.cache_read(Apad, "shared", [B])
 WW = KgeN.cache_read(W, "shared", [B])
 AL = KgeN.cache_read(AA, "local", [B])
 WL = KgeN.cache_read(WW, "local", [B])
@@ -63,4 +63,6 @@ KgeN.bind(bx, "blockIdx.x")
 ty, fi = KgeN.split(B, fi, nparts=num_thread)
 tx, ni = KgeN.split(B, ni, nparts=num_thread)
 
-print(KgeN.lower(B))
+func = KgeN.lower(B)
+print(str(func))
+# print(KgeN.build(func))

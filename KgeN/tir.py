@@ -1,5 +1,4 @@
 import math
-from .visitor import Visitor
 
 # Expr IR
 def wrap_number_as_const_expr(v):
@@ -22,8 +21,10 @@ class Expr:
     MIN = 10
     MAX = 11
     CEIL_DIV = 12
-    NEG = 13
-    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "-"]
+    AND = 13
+    OR = 14
+    NEG = 15
+    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "-"]
 
     def __add__(self, other):
         # TODO: add expr simpifier here
@@ -179,6 +180,29 @@ class Expr:
         else:
             return BinaryExpr(a, b, Expr.CEIL_DIV)
 
+    @staticmethod
+    def and_(a, b):
+        a = wrap_number_as_const_expr(a)
+        b = wrap_number_as_const_expr(b)
+        if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
+            return ConstExpr(math.ceil(a.val and b.val))
+        else:
+            return BinaryExpr(a, b, Expr.AND)
+
+    @staticmethod
+    def or_(a, b):
+        a = wrap_number_as_const_expr(a)
+        b = wrap_number_as_const_expr(b)
+        if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
+            return ConstExpr(math.ceil(a.val or b.val))
+        else:
+            return BinaryExpr(a, b, Expr.OR)
+    
+    def __str__(self):
+        from .ir_printer import IR_Printer
+        ir_printer = IR_Printer()
+        return self.accept(ir_printer)
+
     def same_as(self, other):
         raise NotImplementedError
     
@@ -186,19 +210,16 @@ class Expr:
         raise NotImplementedError
 
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
-        Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.__neg__]
+        Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.and_, Expr.or_, Expr.__neg__]
 
 Expr.is_commutative = [True, True, False, False, False, False, False,
-        False, False, False, True, True, False, False]
+        False, False, False, True, True, False, True, True, False]
 
 class UnaryExpr(Expr):
     def __init__(self, expr, type):
         super().__init__()
         self.expr = expr
         self.type = type
-
-    def __str__(self):
-        return "({0}({1}))".format(Expr.mapping[self.type], self.expr)
 
     def same_as(self, other):
         return isinstance(other, UnaryExpr) and self.type == other.type and self.expr.same_as(other.expr)
@@ -213,11 +234,6 @@ class BinaryExpr(Expr):
         self.right = right
         self.type = type
 
-    def __str__(self):
-        if self.type > 9: # min, max
-            return "({1}({0}, {2}))".format(self.left, Expr.mapping[self.type], self.right)
-        return "({0} {1} {2})".format(self.left, Expr.mapping[self.type], self.right)
-
     def same_as(self, other):
         return self is other or (isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right))
 
@@ -230,9 +246,6 @@ class VarExpr(Expr):
         super().__init__()
         self.name = name
 
-    def __str__(self):
-        return self.name
-
     def same_as(self, other):
         return self is other or (isinstance(other, VarExpr) and self.name == other.name)
 
@@ -244,9 +257,6 @@ class ConstExpr(Expr):
     def __init__(self, val):
         super().__init__()
         self.val = val
-
-    def __str__(self):
-        return str(self.val)
 
     def same_as(self, other):
         return self is other or (isinstance(other, ConstExpr) and self.val == other.val)
@@ -310,21 +320,6 @@ class IterVar(Expr):
         self.relation = IterVar.NORMAL
         self.type = IterVar.DEFAULT
         self.bind_name = ""
-    
-    def __str__(self):
-        if self.range.is_single_point:
-            return str(self.range.start)
-        elif self.type == IterVar.BIND:
-            return self.bind_name
-        elif self.relation == IterVar.SPLIT:
-            return "(({0} * {1}) + {2})".format(str(self.split_outer), str(self.split_inner.range.end), str(self.split_inner))
-        elif self.relation == IterVar.FUSE:
-            if self is self.fused.fused_outer:
-                return "({0} // {1})".format(str(self.fused), str(self.fused.fused_inner.range.end))
-            else:
-                return "({0} % {1})".format(str(self.fused), str(self.fused.fused_inner.range.end))
-        else:
-            return self.name
 
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
@@ -345,9 +340,6 @@ class ReduceExpr(Expr):
             assert(axis.type == IterVar.REDUCE, "axis {0} must be reduce axis.".format(axis.name))
         self.reduce_axis = axis_tuple
     
-    def __str__(self):
-        raise NotImplementedError
-    
     def same_as(self):
         raise NotImplementedError
  
@@ -361,9 +353,6 @@ class IfThenElseExpr(Expr):
         self.condition = wrap_number_as_const_expr(condition)
         self.then_expr = wrap_number_as_const_expr(then_expr)
         self.else_expr = wrap_number_as_const_expr(else_expr)
-
-    def __str__(self):
-        return "({0} ? {1} : {2})".format(str(self.condition), str(self.then_expr), str(self.else_expr))
     
     def same_as(self, other):
         return self is other or (isinstance(other, IfThenElseExpr) and self.condition.same_as(other.condition) and self.then_expr.same_as(other.then_expr) and self.else_expr.same_as(other.else_expr))
@@ -384,9 +373,6 @@ class TensorSliceExpr(Expr):
 
     def __setitem__(self, index, item):
         raise NotImplementedError
-    
-    def __str__(self):
-        return self.tensor.name + "[" + ", ".join([str(index) for index in self.index]) + "]" 
 
     def same_as(self, other):
         if self is other:
@@ -445,9 +431,6 @@ class TensorExpr(Expr):
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice
-    
-    def __str__(self):
-        return self.name
 
     def is_output(self):
         return len(self.outputs) == 0
@@ -463,6 +446,12 @@ class Stmt:
     def __init__(self):
         pass
     
+    def __str__(self):
+        from .ir_printer import IR_Printer
+        ir_printer = IR_Printer()
+        self.accept(ir_printer)
+        return ir_printer.res
+
     def accept(self, visitor):
         raise NotImplementedError
 
@@ -471,9 +460,6 @@ class FuncStmt(Stmt):
         super().__init__()
         self.body = []
         self.tensors = []
-
-    def __str__(self):
-        pass
 
     def accept(self, visitor):
         return visitor.visit_func_stmt(self)
@@ -485,9 +471,6 @@ class ForStmt(Stmt):
         self.body = []
         self.need_sync_before = False
         self.need_sync_after = False
-    
-    def __str__(self):
-        pass
 
     def accept(self, visitor):
         return visitor.visit_for_stmt(self)
@@ -497,9 +480,6 @@ class AssignStmt(Stmt):
         super().__init__()
         self.dest = dest
         self.source = source
-    
-    def __str__(self):
-        pass
     
     def accept(self, visitor):
         return visitor.visit_assign_stmt(self)

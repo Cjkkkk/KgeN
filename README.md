@@ -36,10 +36,10 @@ A TVM-like CUDA code generator.
 - [ ] add expr simplify single point iter var as const expr
 - [x] add sync_threads()
 - [x] add unroll
-- [ ] split nparts
-- [ ] KgeN.all for padding
+- [x] split nparts
+- [x] KgeN.all for padding
 - [ ] conv example
-- [ ] tir print
+- [x] tir print
 
 # example
 ```

@@ -13,5 +13,6 @@ B_outer, B_inner = KgeN.split(B, B.axis[0], 32)
 KgeN.compute_at(B, C, C.axis[1])
 
 # lower
-print(KgeN.lower(C))
+func = KgeN.lower(C)
+print(KgeN.build(func))
 print(A.is_safe, B.is_safe)

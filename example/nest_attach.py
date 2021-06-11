@@ -6,4 +6,5 @@ E = KgeN.compute((5, 16), lambda ei, ej : D[ei, ej]*4, name='E')
 KgeN.compute_at(C, D, D.axis[1])
 KgeN.compute_at(D, E, E.axis[1])
 
-print(KgeN.lower(E))
+func = KgeN.lower(E)
+print(KgeN.build(func))

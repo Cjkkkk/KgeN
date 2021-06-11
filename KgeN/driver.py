@@ -14,4 +14,7 @@ def lower(tensor):
 
     func = gen_func_pass(tensors)
     func = sync_analysis_pass(func)
+    return func
+
+def build(func):
     return CUDA_codegen_pass(func)
