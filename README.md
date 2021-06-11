@@ -35,6 +35,7 @@ A TVM-like CUDA code generator.
 - [x] normalize single point or not?
 - [ ] add expr simplify single point iter var as const expr
 - [x] add sync_threads()
+- [x] add unroll
 
 # example
 ```
@@ -44,21 +45,23 @@ python3 -m example.matmul_cache_write
 ```c
 // tensor: C[64, 64]
 // tensor: C_local[4, 4]
-// tensor: B_shared_local[1, 4]
-// tensor: B_shared[32, 16]
-// tensor: B[64, 64]
 // tensor: A_shared_local[4, 1]
 // tensor: A_shared[16, 32]
 // tensor: A[64, 64]
+// tensor: B_shared_local[1, 4]
+// tensor: B_shared[32, 16]
+// tensor: B[64, 64]
 // gridDim: [4, 4, 1]
 // blockDim: [4, 4, 1]
-__global__ void kernel(float* B, float* A, float* C) {
+__global__ void kernel(float* A, float* B, float* C) {
     float C_local[16];
-    float B_shared_local[4];
-    __shared__ float B_shared[512];
     float A_shared_local[4];
     __shared__ float A_shared[512];
+    float B_shared_local[4];
+    __shared__ float B_shared[512];
+    #pragma unroll
     for (int C_local_i = 0; C_local_i < 4 ; C_local_i += 1) {
+        #pragma unroll
         for (int C_local_j = 0; C_local_j < 4 ; C_local_j += 1) {
             C_local[((C_local_i * 4) + C_local_j)] = 0;
         }
@@ -82,7 +85,9 @@ __global__ void kernel(float* B, float* A, float* C) {
             for (int B_shared_local_i1 = 0; B_shared_local_i1 < 4 ; B_shared_local_i1 += 1) {
                 B_shared_local[((0 * 4) + B_shared_local_i1)] = B_shared[((((0 + ((k_outer * 32) + k_inner)) - (k_outer * 32)) * 16) + ((B_shared_local_i1 + (((blockIdx.y * 4) + threadIdx.y) * 4)) - (blockIdx.y * 16)))];
             }
+            #pragma unroll
             for (int C_local_i = 0; C_local_i < 4 ; C_local_i += 1) {
+                #pragma unroll
                 for (int C_local_j = 0; C_local_j < 4 ; C_local_j += 1) {
                     C_local[((C_local_i * 4) + C_local_j)] = (C_local[((C_local_i * 4) + C_local_j)] + (A_shared_local[C_local_i] * B_shared_local[C_local_j]));
                 }
@@ -92,7 +97,7 @@ __global__ void kernel(float* B, float* A, float* C) {
     }
     for (int C_i_inner = 0; C_i_inner < 4 ; C_i_inner += 1) {
         for (int C_j_inner = 0; C_j_inner < 4 ; C_j_inner += 1) {
-            C[((((((blockIdx.x * 4) + threadIdx.x) * 4) + C_i_inner) * 64) + ((((blockIdx.y * 4) + threadIdx.y) * 4) + C_j_inner))] = C_local[((C_i_inner * 4) + C_j_inner)];
+            C[((((((blockIdx.x * 4) + threadIdx.x) * 4) + C_i_inner) * 64) + ((((blockIdx.y * 4) + threadIdx.y) * 4) + C_j_inner))] = C_local[(((((((blockIdx.x * 4) + threadIdx.x) * 4) + C_i_inner) - (((blockIdx.x * 4) + threadIdx.x) * 4)) * 4) + (((((blockIdx.y * 4) + threadIdx.y) * 4) + C_j_inner) - (((blockIdx.y * 4) + threadIdx.y) * 4)))];
         }
     }
 }
