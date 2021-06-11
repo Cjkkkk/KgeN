@@ -87,13 +87,15 @@ class CUDA_code_generator(Visitor):
         if stmt.need_sync_before:
             self.emit("__syncthreads();")
         if not var.range.is_single_point and not var.type == IterVar.BIND:
+            if var.type == IterVar.UNROLL:
+                self.emit("#pragma unroll")
             self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3}) {{".format(
                 var.name, 
                 var.range.start.accept(self),
                 var.range.end.accept(self),
                 1))
             self.enter_scope()
-        
+            
         for st in stmt.body:
             st.accept(self)
         

@@ -34,6 +34,8 @@ BTy, _ = KgeN.split(BB, BN, 4)
 M, N, K = CCC.axis
 Ko, Ki = KgeN.split(CCC, K, 32)
 KgeN.reorder(CCC, Ko, Ki, M, N)
+KgeN.unroll(CCC, M)
+KgeN.unroll(CCC, N)
 KgeN.compute_at(AA, CCC, Ko)
 KgeN.compute_at(BB, CCC, Ko)
 KgeN.compute_at(AAA, CCC, Ki)
