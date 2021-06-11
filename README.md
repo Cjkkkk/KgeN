@@ -39,6 +39,7 @@ A TVM-like CUDA code generator.
 - [ ] split nparts
 - [ ] KgeN.all for padding
 - [ ] conv example
+- [ ] tir print
 
 # example
 ```

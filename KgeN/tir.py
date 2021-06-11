@@ -312,8 +312,19 @@ class IterVar(Expr):
         self.bind_name = ""
     
     def __str__(self):
-        # return "{0}: [{1}, {2} {3}".format(self.name, self.range.start, self.range.end, "]" if self.range.type == Range.CLOSED_CLOSED else ")")
-        return "{0}".format(self.name)
+        if self.range.is_single_point:
+            return str(self.range.start)
+        elif self.type == IterVar.BIND:
+            return self.bind_name
+        elif self.relation == IterVar.SPLIT:
+            return "(({0} * {1}) + {2})".format(str(self.split_outer), str(self.split_inner.range.end), str(self.split_inner))
+        elif self.relation == IterVar.FUSE:
+            if self is self.fused.fused_outer:
+                return "({0} // {1})".format(str(self.fused), str(self.fused.fused_inner.range.end))
+            else:
+                return "({0} % {1})".format(str(self.fused), str(self.fused.fused_inner.range.end))
+        else:
+            return self.name
 
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
@@ -461,6 +472,9 @@ class FuncStmt(Stmt):
         self.body = []
         self.tensors = []
 
+    def __str__(self):
+        pass
+
     def accept(self, visitor):
         return visitor.visit_func_stmt(self)
 
@@ -472,6 +486,9 @@ class ForStmt(Stmt):
         self.need_sync_before = False
         self.need_sync_after = False
     
+    def __str__(self):
+        pass
+
     def accept(self, visitor):
         return visitor.visit_for_stmt(self)
 
@@ -480,6 +497,9 @@ class AssignStmt(Stmt):
         super().__init__()
         self.dest = dest
         self.source = source
+    
+    def __str__(self):
+        pass
     
     def accept(self, visitor):
         return visitor.visit_assign_stmt(self)

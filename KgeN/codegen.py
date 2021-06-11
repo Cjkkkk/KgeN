@@ -9,7 +9,8 @@ class CUDA_code_generator(Visitor):
     def __init__(self):
         self.scope = 0
         self.res = ""
-
+        self.op_mapping = ["+", "*", "/", "/", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "-"]
+    
     def emit(self, str):
         self.res += self.scope * "    " + str + "\n"
     
@@ -107,11 +108,11 @@ class CUDA_code_generator(Visitor):
     
     def visit_binary_expr(self, expr):
         if expr.type > 9: # min, max
-            return "({1}({0}, {2}))".format(expr.left.accept(self), Expr.mapping[expr.type], expr.right.accept(self))
-        return "({0} {1} {2})".format(expr.left.accept(self), Expr.mapping[expr.type], expr.right.accept(self))
+            return "({1}({0}, {2}))".format(expr.left.accept(self), self.op_mapping[expr.type], expr.right.accept(self))
+        return "({0} {1} {2})".format(expr.left.accept(self), self.op_mapping[expr.type], expr.right.accept(self))
     
     def visit_unary_expr(self, expr):
-        return "({0}({1}))".format(Expr.mapping[expr.type], expr.expr.accept(self))
+        return "({0}({1}))".format(self.op_mapping[expr.type], expr.expr.accept(self))
 
     def visit_var_expr(self, expr):
         return expr.name
@@ -128,7 +129,7 @@ class CUDA_code_generator(Visitor):
             return "(({0} * {1}) + {2})".format(expr.split_outer.accept(self), expr.split_inner.range.end.accept(self), expr.split_inner.accept(self))
         elif expr.relation == IterVar.FUSE:
             if expr is expr.fused.fused_outer:
-                return "({0} // {1})".format(expr.fused.accept(self), expr.fused.fused_inner.range.end.accept(self))
+                return "({0} / {1})".format(expr.fused.accept(self), expr.fused.fused_inner.range.end.accept(self))
             else:
                 return "({0} % {1})".format(expr.fused.accept(self), expr.fused.fused_inner.range.end.accept(self))
         else:
