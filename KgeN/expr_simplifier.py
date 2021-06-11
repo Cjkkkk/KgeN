@@ -29,7 +29,7 @@ def real_match(expr, pattern):
     if isinstance(expr, IterVar):
         # TODO: fix this
         if expr.type == IterVar.SPLIT:
-            expr = expr.splitted_outer * expr.splitted_inner.range.end + expr.splitted_inner
+            expr = expr.split_outer * expr.split_inner.range.end + expr.split_inner
     if isinstance(pattern, BinaryExpr):
         if isinstance(expr, BinaryExpr):
             if pattern.type != expr.type:

@@ -3,7 +3,7 @@ from .gen_func import gen_func_pass
 from .codegen import CUDA_codegen_pass
 from .build_graph import build_graph_pass
 from .sync_analysis import sync_analysis_pass
-from .utils import *
+from .utils import tensor_topo_sort_bottom_up
 
 def lower(tensor):
     build_graph_pass(tensor)

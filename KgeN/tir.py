@@ -331,8 +331,7 @@ class ReduceExpr(Expr):
         axis_tuple = axis if isinstance(axis, tuple) else (axis, )
         
         for axis in axis_tuple:
-            if axis.type != IterVar.REDUCE:
-                raise ValueError("axis {0} must be reduce axis.".format(axis.name))
+            assert(axis.type == IterVar.REDUCE, "axis {0} must be reduce axis.".format(axis.name))
         self.reduce_axis = axis_tuple
     
     def __str__(self):
@@ -431,8 +430,7 @@ class TensorExpr(Expr):
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
-        if len(index) != len(self.root_axis):
-            raise ValueError("should provide exactly {0} axis, got {1}.".format(len(self.root_axis), len(index)))
+        assert(len(index) == len(self.root_axis), "should provide exactly {0} axis, got {1}.".format(len(self.root_axis), len(index)))
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice

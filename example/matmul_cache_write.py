@@ -22,7 +22,7 @@ Mo, Mi = KgeN.split(C, M, 4)
 No, Ni = KgeN.split(C, N, 4)
 Bx, Tx = KgeN.split(C, Mo, 4)
 By, Ty = KgeN.split(C, No, 4)
-KgeN.reorder(C, (Bx, By, Tx, Ty, Mi, Ni))
+KgeN.reorder(C, Bx, By, Tx, Ty, Mi, Ni)
 
 AM, AK = AA.axis
 BK, BN = BB.axis
@@ -33,7 +33,7 @@ BTy, _ = KgeN.split(BB, BN, 4)
 
 M, N, K = CCC.axis
 Ko, Ki = KgeN.split(CCC, K, 32)
-KgeN.reorder(CCC, (Ko, Ki, M, N))
+KgeN.reorder(CCC, Ko, Ki, M, N)
 KgeN.compute_at(AA, CCC, Ko)
 KgeN.compute_at(BB, CCC, Ko)
 KgeN.compute_at(AAA, CCC, Ki)

@@ -44,7 +44,7 @@ def tensor_topo_sort_bottom_up(tensor):
 def axis_topo_sort_top_down(axis_tuple):
     def get_output(axis):
         if axis.relation == IterVar.SPLIT:
-            return [axis.splitted_outer, axis.splitted_inner]
+            return [axis.split_outer, axis.split_inner]
         elif axis.relation == IterVar.FUSE:
             return [axis.fused]
         else:
@@ -54,8 +54,8 @@ def axis_topo_sort_top_down(axis_tuple):
 
 def axis_topo_sort_bottom_up(axis_tuple):
     def get_output(axis):
-        if hasattr(axis, "splitted"):
-            return [axis.splitted]
+        if hasattr(axis, "split"):
+            return [axis.split]
         elif hasattr(axis, "fused_outer"):
             return [axis.fused_outer, axis.fused_inner]
         else:
@@ -66,6 +66,7 @@ def axis_topo_sort_bottom_up(axis_tuple):
 def index_flatten(index, shape):
     def f(a, b):
         return a * b
+    
     def scan(f, state, l):
         res = []
         for e in l:

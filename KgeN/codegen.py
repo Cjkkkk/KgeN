@@ -123,7 +123,7 @@ class CUDA_code_generator(Visitor):
         elif expr.type == IterVar.BIND:
             return expr.bind_name
         elif expr.relation == IterVar.SPLIT:
-            return "(({0} * {1}) + {2})".format(expr.splitted_outer.accept(self), expr.splitted_inner.range.end.accept(self), expr.splitted_inner.accept(self))
+            return "(({0} * {1}) + {2})".format(expr.split_outer.accept(self), expr.split_inner.range.end.accept(self), expr.split_inner.accept(self))
         elif expr.relation == IterVar.FUSE:
             if expr is expr.fused.fused_outer:
                 return "({0} // {1})".format(expr.fused.accept(self), expr.fused.fused_inner.range.end.accept(self))

@@ -15,7 +15,7 @@ M, N, K = C.axis
 Mo, Mi = KgeN.split(C, M, 16)
 No, Ni = KgeN.split(C, N, 16)
 Ko, Ki = KgeN.split(C, K, 16)
-KgeN.reorder(C, (Mo, No, Ko, Mi, Ni, Ki))
+KgeN.reorder(C, Mo, No, Ko, Mi, Ni, Ki)
 AA = KgeN.cache_read(A, "shared", [C])
 BB = KgeN.cache_read(B, "shared", [C])
 KgeN.compute_at(AA, C, Ko)

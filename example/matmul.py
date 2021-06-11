@@ -12,5 +12,5 @@ C = KgeN.compute((M, N),
     name="C")
 
 M, N, K = C.axis
-KgeN.reorder(C, (K, N))
+KgeN.reorder(C, K, N)
 print(KgeN.lower(C))
