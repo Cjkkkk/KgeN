@@ -18,7 +18,7 @@ def check_tensor_and_axis(tensor, *axis):
     for ax in axis:
         assert(ax in tensor.axis, "{0} is not {1}'s axis".format(ax.name, tensor.name))
 
-def split(tensor, ax, factor):
+def split(tensor, ax, factor=-1, nparts=-1):
     check_tensor_and_axis(tensor, ax)
     
     new_axis = []
@@ -33,6 +33,8 @@ def split(tensor, ax, factor):
             inner.split = axis
 
             axis.factor = factor
+            axis.nparts = nparts
+            
             axis.relation = IterVar.SPLIT
             new_axis.append(outer)
             new_axis.append(inner)
@@ -49,16 +51,16 @@ def tile(tensor, ax1, ax2, factor1, factor2):
 
 def reorder(tensor, *axis):
     check_tensor_and_axis(tensor, *axis)
-    new_axis_list = []
+    new_axis = []
     cur = 0
     axis_set = set(axis)
     for ax in tensor.axis:
         if ax in axis_set:
-            new_axis_list.append(axis[cur])
+            new_axis.append(axis[cur])
             cur += 1
         else:
-            new_axis_list.append(ax)
-    tensor.axis = new_axis_list
+            new_axis.append(ax)
+    tensor.axis = new_axis
 
 def fuse(tensor, ax1, ax2):
     check_tensor_and_axis(tensor, ax1, ax2)
@@ -151,7 +153,7 @@ def cache_write(tensor, scope):
     all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
     new_axis = [axis for axis in tensor.axis if axis not in all_reduce_axis]
     tensor.reduce_axis = ()
-    tensor.axis = tuple(new_axis)
+    tensor.axis = new_axis
 
     # TODO: what to do with attach information?
     return cache_tensor
