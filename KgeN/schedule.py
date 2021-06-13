@@ -102,6 +102,9 @@ def compute_at(tensor, attach_at, axis):
     tensor.attach_axis = axis
     axis.attached_computation.append(tensor)
 
+def compute_inline(tensor):
+    tensor.is_inline = True
+
 # rewrite dataflow for cache_read
 class RewriteDataFlowVisitor(RewriteExprVisitor):
     def __init__(self, map):

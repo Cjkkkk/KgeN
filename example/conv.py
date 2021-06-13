@@ -37,7 +37,7 @@ B = KgeN.compute(
     name="B",
 )
 
-
+KgeN.compute_inline(Apad)
 AA = KgeN.cache_read(Apad, "shared", [B])
 WW = KgeN.cache_read(W, "shared", [B])
 AL = KgeN.cache_read(AA, "local", [B])
@@ -83,7 +83,6 @@ yi, xi, ci, ni = AA.axis
 ty, ci = KgeN.split(AA, ci, nparts=num_thread)
 tx, ni = KgeN.split(AA, ni, nparts=num_thread)
 KgeN.reorder(AA, ty, tx, yi, xi, ci, ni)
-KgeN.compute_at(Apad, AA, ni)
 KgeN.bind(ty, "threadIdx.y")
 KgeN.bind(tx, "threadIdx.x")
 

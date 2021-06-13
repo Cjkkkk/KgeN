@@ -1,4 +1,5 @@
 from .tir import *
+from .expr_simplifier import expr_simplifier
 
 def topo_sort(iterable, get_output):
     # Kahn's algorithm
@@ -80,4 +81,5 @@ def index_flatten(index, shape):
 
     for index, prod in zip(index, prod):
         flatten_index = flatten_index + index * prod
+    flatten_index = expr_simplifier.rewrite(flatten_index)
     return flatten_index

@@ -376,11 +376,10 @@ class TensorSliceExpr(Expr):
     def same_as(self, other):
         if self is other:
             return True
-        res = isinstance(other, TensorSliceExpr) and self.tensor.same_as(other.tensor)
-        if res:
-            idx_res = [self.index[i].same_as(other.index[i]) for i in range(len(self.index))]
-            for i in idx_res:
-                res = res and i
+        res = isinstance(other, TensorSliceExpr) and self.tensor.same_as(other.tensor) and len(self.index) == len(other.index)
+        for i in range(len(self.index)):
+            if res:
+                res = res and self.index[i].same_as(other.index[i])
         return res
 
     def accept(self, visitor):
@@ -401,6 +400,7 @@ class TensorExpr(Expr):
         # compute at
         self.attached = False
         self.attach_at = None
+        self.is_inline = False
         # is_safe == True means that no boundary test is needed
         self.is_safe = True
 

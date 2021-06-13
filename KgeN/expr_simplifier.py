@@ -108,7 +108,7 @@ def reset_pattern(pattern):
         pattern.reset()
 
 
-class ExprSimpifier(RewriteExprVisitor):  
+class ExprSimplifier(RewriteExprVisitor):  
     def __init__(self):
         super().__init__()
     
@@ -171,7 +171,7 @@ class ExprSimpifier(RewriteExprVisitor):
             else:
                 old_expr = expr
 
-expr_simpifier = ExprSimpifier()
+expr_simplifier = ExprSimplifier()
         
 if __name__ == "__main__":
     C1 = Pattern(ConstExpr)

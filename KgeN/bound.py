@@ -1,6 +1,6 @@
 from .utils import *
 from .visitor import RewriteExprVisitor
-from .expr_simplifier import expr_simpifier
+from .expr_simplifier import expr_simplifier
 from .tir import Range
 
 # bound inference
@@ -12,13 +12,13 @@ class RewriteIterVarVisitor(RewriteExprVisitor):
     def visit_iter_expr(self, expr):
         if expr in self.map:
             expr = self.map[expr]
-            expr = expr_simpifier.rewrite(expr)
+            expr = expr_simplifier.rewrite(expr)
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
     shift = [bound.normalize() for bound in bounds]
     for bound in bounds:
-        bound.end = expr_simpifier.rewrite(bound.end)
+        bound.end = expr_simplifier.rewrite(bound.end)
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     root_axis_to_shift = {}
@@ -27,7 +27,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
         
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
-            provider.index = tuple([expr_simpifier.rewrite(idx - shift[i]) for i, idx in enumerate(provider.index)])
+            provider.index = tuple([expr_simplifier.rewrite(idx - shift[i]) for i, idx in enumerate(provider.index)])
     
     if tensor.type != TensorExpr.PLACEHOLDER:
         visitor = RewriteIterVarVisitor(root_axis_to_shift)
