@@ -41,7 +41,7 @@ A TVM-like CUDA code generator.
 - [ ] conv example
 - [x] tir print
 - [ ] compute inline
-- [ ] default scope for placeholder is global, for compute is local
+- [x] default scope for placeholder is global, for compute is local
 - [ ] consider hash expr to avoid same_as overhead, make expr attribute immutable to make sure re-hash
 
 # example

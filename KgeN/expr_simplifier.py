@@ -139,9 +139,14 @@ class ExprSimplifier(RewriteExprVisitor):
                 expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
                 expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
                 expr = rewrite(expr, V1 - V1, ConstExpr(0))
+                expr = rewrite(expr, C1 - C2, C1 - C2)
             elif expr.type == Expr.MUL:
+                expr = rewrite(expr, C1 * V1, V1 * C1)
+                expr = rewrite(expr, V1 * C1 * V2, V1 * V2 * C1)
+
                 expr = rewrite(expr, (V1 + C1) * C2, V1 * C2 + C1 * C2)
                 expr = rewrite(expr, (V1 * C1) * C2, V1 * (C1 * C2))
+                expr = rewrite(expr, C1 * C2, C1 * C2)
             elif expr.type == Expr.MIN:
                 expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
                 expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
