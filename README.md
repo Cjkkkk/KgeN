@@ -33,13 +33,15 @@ A TVM-like CUDA code generator.
 - [x] move collect input as build graph pass
 - [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [x] normalize single point or not?
-- [ ] add expr simplify single point iter var as const expr
+- [x] add expr simplify single point iter var as const expr
 - [x] add sync_threads()
 - [x] add unroll
 - [x] split nparts
 - [x] KgeN.all for padding
 - [ ] conv example
 - [x] tir print
+- [ ] compute inline
+- [ ] default scope for placeholder is global, for compute is local
 
 # example
 ```

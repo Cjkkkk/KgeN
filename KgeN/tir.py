@@ -271,18 +271,19 @@ class Range:
     def __init__(self, start, end, type=CLOSED_OPEN):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
-        self.is_single_point = False
         self.type = type
-
-        if self.type == Range.CLOSED_CLOSED and self.start.same_as(self.end):
-            # TODO: fix this, should be done at runtime
-            self.is_single_point = True
 
     @staticmethod
     def single_point(expr):
         interval = Range(expr, expr, Range.CLOSED_CLOSED)
-        interval.is_single_point = True
         return interval
+
+    @property
+    def is_single_point(self):
+        if self.type == Range.CLOSED_CLOSED:
+            return self.start.same_as(self.end)
+        else:
+            return (self.start + 1).same_as(self.end)
 
     def __str__(self):
         return "[{0}, {1} {2}".format(self.start, self.end, "]" if self.type == Range.CLOSED_CLOSED else ")")

@@ -28,7 +28,9 @@ class Pattern(Expr):
 def real_match(expr, pattern):
     if isinstance(expr, IterVar):
         # TODO: fix this
-        if expr.type == IterVar.SPLIT:
+        if expr.range.is_single_point:
+            expr = expr.range.start
+        elif expr.type == IterVar.SPLIT:
             expr = expr.split_outer * expr.split_inner.range.end + expr.split_inner
     if isinstance(pattern, BinaryExpr):
         if isinstance(expr, BinaryExpr):
@@ -38,10 +40,10 @@ def real_match(expr, pattern):
             ans_right = real_match(expr.right, pattern.right)
             
             # automatically try 
-            if not (ans_left and ans_right) and Expr.is_commutative[expr.type]:
-                reset_pattern(pattern)
-                ans_left = real_match(expr.left, pattern.right)
-                ans_right = real_match(expr.right, pattern.left)
+            # if not (ans_left and ans_right) and Expr.is_commutative[expr.type]:
+            #     reset_pattern(pattern)
+            #     ans_left = real_match(expr.left, pattern.right)
+            #     ans_right = real_match(expr.right, pattern.left)
             return ans_left and ans_right
         else:
             return False
@@ -109,23 +111,29 @@ def reset_pattern(pattern):
 class ExprSimpifier(RewriteExprVisitor):  
     def __init__(self):
         super().__init__()
-         
+    
     def visit_binary_expr(self, expr):
         # TODO: move this to __init__ ?
         C1 = Pattern(ConstExpr)
         C2 = Pattern(ConstExpr)
         V1 = Pattern(Expr)
         V2 = Pattern(Expr)
+        V3 = Pattern(Expr)
         old_expr = expr
         while True:
             expr.left = expr.left.accept(self)
             expr.right = expr.right.accept(self)
             if expr.type == Expr.ADD:
-                expr = rewrite(expr, (V1 + C1) + C2, V1 + (C1 + C2))
+                # throw const to latter position
+                expr = rewrite(expr, C1 + V1, V1 + C1)
+                expr = rewrite(expr, V1 + C1 + V2, V1 + V2 + C1)
+
+                expr = rewrite(expr, V1 + C1 + C2, V1 + (C1 + C2))
                 expr = rewrite(expr, (V1 - C1) + C2, V1 + (C2 - C1))
                 expr = rewrite(expr, (C1 - V1) + C2, V1 + (C1 - C2) - V1)
                 expr = rewrite(expr, C1 + C2, C1 + C2)
             elif expr.type == Expr.SUB:
+                expr = rewrite(expr, (V1 + V2) - (V1 + V3), (V2 - V3))
                 expr = rewrite(expr, (V1 + V2) - V1, V2)
                 expr = rewrite(expr, (V1 + V2) - V2, V1)
                 expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))

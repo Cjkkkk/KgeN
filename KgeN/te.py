@@ -8,7 +8,7 @@ def placeholder(shape, name):
     return TensorExpr(shape, name, TensorExpr.PLACEHOLDER)
 
 def compute(shape, function, name):
-    tensor = TensorExpr(shape, name, TensorExpr.COMPUTE, function)
+    tensor = TensorExpr(shape, name, TensorExpr.COMPUTE, function, scope="local")
     return tensor
 
 def if_then_else(condition, then_expr, else_expr):

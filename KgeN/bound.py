@@ -44,6 +44,7 @@ def infer_root_iter_bound(tensor, rmap):
         if len(tensor.attach_path) > 0: # not necessary but just for clearity
             for axis in tensor.attach_path:
                 # Do not treat certain axis as single point axis
+                # TODO: should this be necessary?
                 if tensor.scope == "global" and axis.bind_name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
                     continue
                 if tensor.scope == "shared" and axis.bind_name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
@@ -115,14 +116,14 @@ def pass_down(rmap, axis_tuple):
             # we already know root_axis's range
             pass
 
-
+# TODO: check this...
 def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.relation == IterVar.SPLIT:
             if rmap[axis.split_outer].is_single_point and rmap[axis.split_inner].is_single_point:
                 rmap[axis] = Range.single_point(axis)
             else:
-                rmap[axis] = evaluate_expr_bound(axis.split_outer * axis.split_inner.end + axis.split_inner, rmap, {})
+                rmap[axis] = evaluate_expr_bound(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {})
                 # rmap[axis] = Range(rmap[axis.split_outer].start * axis.factor + rmap[axis.split_inner].start, 
                 #                     rmap[axis.split_outer].end * axis.factor + rmap[axis.split_inner].end)
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
@@ -130,8 +131,8 @@ def pass_up(rmap, axis_tuple):
                 rmap[axis.fused.fused_outer] = Range.single_point(axis.fused.fused_outer)
                 rmap[axis.fused.fused_inner] = Range.single_point(axis.fused.fused_inner)
             else:
-                rmap[axis.fused.fused_outer] = Range(rmap[axis.fused].start // axis.factor, Expr.ceilDiv(rmap[axis.fused].end, axis.factor))
-                rmap[axis.fused.fused_inner] = Range(0, axis.factor)
+                rmap[axis.fused.fused_outer] = Range(Expr.ceildiv(rmap[axis.fused].start, axis.fused.fused_inner.range.end), Expr.ceildiv(rmap[axis.fused].end, axis.fused.fused_inner.range.end))
+                rmap[axis.fused.fused_inner] = Range(0, axis.fused.fused_inner.range.end)
         else:
             pass
 
@@ -174,7 +175,7 @@ def evaluate_expr_bound(expr, rmap, relax_set):
             interval = Range(left.start - right.start, left.end - right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.MUL:
             interval = Range(left.start * right.start, left.end * right.end, type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.FLOOR_DIV:
+        elif expr.type == Expr.FLOOR_DIV or expr.type == Expr.CEIL_DIV: # TODO: fix this
             interval = Range(left.start // right.start, left.end // right.end, type=Range.CLOSED_CLOSED)
         elif expr.type == Expr.MOD:
             interval = Range(left.start % right.start, left.end % right.end, type=Range.CLOSED_CLOSED)
