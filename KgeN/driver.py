@@ -7,6 +7,7 @@ from .utils import tensor_topo_sort_bottom_up
 from .inline_injection import inline_injection_pass
 
 def lower(tensor):
+    tensor.scope = "global"
     build_graph_pass(tensor)
     tensors = tensor_topo_sort_bottom_up(tensor)
     

@@ -122,8 +122,7 @@ def cache_read(tensor, scope, readers):
     local_vars = {}
     exec(lambda_str, {"tensor": tensor}, local_vars)
     compiled = local_vars["_"]
-    cache_tensor = compute(tensor.shape, compiled, cache_tensor_name)
-    cache_tensor.scope = scope
+    cache_tensor = compute(tensor.shape, compiled, cache_tensor_name, scope)
 
     global_cache_map[tensor] = cache_tensor
     for k, v in global_cache_map.items():
@@ -139,8 +138,7 @@ def cache_read(tensor, scope, readers):
 def cache_write(tensor, scope):
     # TODO: fix compute, use local
     cache_tensor_name = tensor.name + "_" + scope
-    cache_tensor = compute(tensor.shape, tensor.compute_func, cache_tensor_name)
-    cache_tensor.scope = scope
+    cache_tensor = compute(tensor.shape, tensor.compute_func, cache_tensor_name, scope)
     visitor = RewriteDataFlowVisitor(global_cache_map)
     cache_tensor.expr = visitor.rewrite(cache_tensor.expr)
     

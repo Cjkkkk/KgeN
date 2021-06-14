@@ -75,9 +75,8 @@ def infer_root_iter_bound(tensor, rmap):
         bounds = normalize_bound_and_rewrite_expr(tensor, bounds)
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
-            # convert back to closed_open interval
-            if not bounds[i].is_single_point:
-                bounds[i].as_closed_open()
+            # convert back to closed_open interval if it is not single
+            bounds[i].as_closed_open()
             rmap[root_axis] = bounds[i]
             root_axis.range = rmap[root_axis]
         
@@ -91,27 +90,17 @@ def infer_root_iter_bound(tensor, rmap):
         for root_axis in tensor.root_axis:
             rmap[root_axis] = root_axis.range
 
-
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.relation == IterVar.SPLIT:
-            if rmap[axis].is_single_point:
-                rmap[axis.split_outer] = Range.single_point(axis.split_outer)
-                rmap[axis.split_inner] = Range.single_point(axis.split_inner)
+            if axis.factor != -1:
+                rmap[axis.split_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
+                rmap[axis.split_inner] = Range(0, Expr.min(rmap[axis].end, axis.factor))
             else:
-                if axis.factor != -1:
-                    rmap[axis.split_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
-                    rmap[axis.split_inner] = Range(0, axis.factor)
-                else:
-                    rmap[axis.split_outer] = Range(0, axis.nparts)
-                    rmap[axis.split_inner] = Range(0, Expr.ceildiv(rmap[axis].end, axis.nparts))
+                rmap[axis.split_outer] = Range(0, Expr.min(rmap[axis].end, axis.nparts))
+                rmap[axis.split_inner] = Range(0, Expr.ceildiv(rmap[axis].end, axis.nparts))
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
-            if rmap[axis].is_single_point and rmap[axis.fused.fused_inner].is_single_point:
-                rmap[axis.fused] = Range.single_point(axis.fused)
-            else:
-                # rmap[axis.fused] = Range(rmap[axis.fused.fused_outer].start * axis.factor + rmap[axis.fused.fused_inner].start, 
-                #                             rmap[axis.fused.fused_outer].end * axis.factor + rmap[axis.fused.fused_inner].end)
-                rmap[axis.fused] = evaluate_expr_bound(axis.fused.fused_outer * rmap[axis.fused.fused_inner].end + axis.fused.fused_inner, rmap, {})
+            rmap[axis.fused] = Range(0, rmap[axis.fused.fused_outer].end * rmap[axis.fused.fused_inner].end)
         else:
             # we already know root_axis's range
             pass
@@ -124,8 +113,7 @@ def pass_up(rmap, axis_tuple):
                 rmap[axis] = Range.single_point(axis)
             else:
                 rmap[axis] = evaluate_expr_bound(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {})
-                # rmap[axis] = Range(rmap[axis.split_outer].start * axis.factor + rmap[axis.split_inner].start, 
-                #                     rmap[axis.split_outer].end * axis.factor + rmap[axis.split_inner].end)
+                rmap[axis].as_closed_open()
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis.fused].is_single_point:
                 rmap[axis.fused.fused_outer] = Range.single_point(axis.fused.fused_outer)
@@ -158,11 +146,8 @@ def create_attach_path(tensor):
 
 def evaluate_expr_bound(expr, rmap, relax_set):
     if isinstance(expr, IterVar):
-        if rmap[expr].type == Range.CLOSED_CLOSED:
-            interval = rmap[expr]
-        else:
-            # convert to closed closed interval
-            interval = Range(rmap[expr].start, rmap[expr].end - 1, type=Range.CLOSED_CLOSED)
+        # convert to closed closed interval
+        interval = Range(rmap[expr].start, expr_simplifier.rewrite(rmap[expr].end - 1), type=Range.CLOSED_CLOSED)
         if expr in relax_set:
             interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type=Range.CLOSED_CLOSED)
     
@@ -200,7 +185,7 @@ def evaluate_expr_bound(expr, rmap, relax_set):
         # TODO: fix TensorSliceExpr
         pass
     elif isinstance(expr, ConstExpr) or isinstance(expr, VarExpr):
-        interval = Range.single_point(expr)
+        interval = Range(expr, expr, type=Range.CLOSED_CLOSED)
     else:
         raise ValueError("Unsupported expr type {}".format(type(expr)))
     return interval

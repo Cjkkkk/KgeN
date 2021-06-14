@@ -273,7 +273,7 @@ class Range:
 
     @staticmethod
     def single_point(expr):
-        interval = Range(expr, expr, Range.CLOSED_CLOSED)
+        interval = Range(expr, expr + 1)
         return interval
 
     @property
@@ -458,7 +458,9 @@ class FuncStmt(Stmt):
     def __init__(self):
         super().__init__()
         self.body = []
-        self.tensors = []
+        self.storage = []
+        self.input_tensors = []
+        self.output_tensors = []
 
     def accept(self, visitor):
         return visitor.visit_func_stmt(self)

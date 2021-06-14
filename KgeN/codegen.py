@@ -31,22 +31,22 @@ class CUDA_code_generator(Visitor):
         self.emit("__global__ void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
     
     def generate_tensor_shape(self, func_stmt):
-        for tensor in func_stmt.tensors:
+        for tensor in func_stmt.storage:
             self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
     
     def generate_lanuch_config(self, func_stmt):
         # TODO: fix this: assume only one output
-        block_dim = {
+        grid_dim = {
             "blockIdx.x": 1,
             "blockIdx.y": 1, 
             "blockIdx.z": 1
         }
-        grid_dim = {
+        block_dim = {
             "threadIdx.x": 1, 
             "threadIdx.y": 1,
             "threadIdx.z": 1
         }
-        output = func_stmt.tensors[0]
+        output = func_stmt.output_tensors[0]
         for axis in output.axis:
             if axis.type == IterVar.BIND:
                 if axis.bind_name in block_dim:
@@ -59,7 +59,7 @@ class CUDA_code_generator(Visitor):
 
     def generate_storage(self, func_stmt):
         from functools import reduce
-        for tensor in func_stmt.tensors:
+        for tensor in func_stmt.storage:
             if tensor.scope == "global":
                 continue
             elif tensor.scope == "local":
