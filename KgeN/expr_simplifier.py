@@ -30,8 +30,8 @@ def real_match(expr, pattern):
         # TODO: fix this
         if expr.range.is_single_point:
             expr = expr.range.start
-        elif expr.type == IterVar.SPLIT:
-            expr = expr.split_outer * expr.split_inner.range.end + expr.split_inner
+        # elif expr.type == IterVar.SPLIT:
+        #     expr = expr.split_outer * expr.split_inner.range.end + expr.split_inner
     if isinstance(pattern, BinaryExpr):
         if isinstance(expr, BinaryExpr):
             if pattern.type != expr.type:

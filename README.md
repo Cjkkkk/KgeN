@@ -31,7 +31,7 @@ A TVM-like CUDA code generator.
 - [ ] cache read virtual thread and reduce axis
 - [x] cache write
 - [x] move collect input as build graph pass
-- [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
+- [ ] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [x] normalize single point or not?
 - [x] add expr simplify single point iter var as const expr
 - [x] add sync_threads()
