@@ -16,18 +16,20 @@ class RewriteIterVarVisitor(RewriteExprVisitor):
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
-    shift = [bound.normalize() for bound in bounds]
+    res = [bound.normalize() for bound in bounds]
     for bound in bounds:
         bound.end = expr_simplifier.rewrite(bound.end)
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.root_axis):
-        root_axis_to_shift[axis] = axis + shift[i]
+        shift,stride = res[i]
+        root_axis_to_shift[axis] = (axis + shift) * stride
+        root_axis_to_shift[axis] = expr_simplifier.rewrite(root_axis_to_shift[axis])
         
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
-            provider.index = tuple([expr_simplifier.rewrite(idx - shift[i]) for i, idx in enumerate(provider.index)])
+            provider.index = tuple([expr_simplifier.rewrite((idx - res[i][0]) // res[i][1]) for i, idx in enumerate(provider.index)])
     
     if tensor.type != TensorExpr.PLACEHOLDER:
         visitor = RewriteIterVarVisitor(root_axis_to_shift)
@@ -122,6 +124,7 @@ def pass_up(rmap, axis_tuple):
                 rmap[axis.fused.fused_outer] = Range(Expr.ceildiv(rmap[axis.fused].start, axis.fused.fused_inner.range.end), Expr.ceildiv(rmap[axis.fused].end, axis.fused.fused_inner.range.end))
                 rmap[axis.fused.fused_inner] = Range(0, axis.fused.fused_inner.range.end)
         else:
+            # we already set leaf_axis's range
             pass
 
 

@@ -5,6 +5,7 @@ from .build_graph import build_graph_pass
 from .sync_analysis import sync_analysis_pass
 from .utils import tensor_topo_sort_bottom_up
 from .inline_injection import inline_injection_pass
+from .expand import expand_pass
 
 def lower(tensor):
     tensor.scope = "global"
@@ -14,6 +15,7 @@ def lower(tensor):
     inline_injection_pass(tensors)
     infer_bound_pass(tensors)
     check_bound_pass(tensors)
+    expand_pass(tensors)
 
     func = gen_func_pass(tensors)
     func = sync_analysis_pass(func)

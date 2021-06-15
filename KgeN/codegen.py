@@ -94,7 +94,7 @@ class CUDA_code_generator(Visitor):
                 var.name, 
                 var.range.start.accept(self),
                 var.range.end.accept(self),
-                1))
+                var.range.stride.accept(self)))
             self.enter_scope()
             
         for st in stmt.body:

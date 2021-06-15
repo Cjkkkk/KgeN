@@ -90,6 +90,8 @@ class Expr:
             return ConstExpr(self.val // other.val)
         elif isinstance(self, ConstExpr) and self.val == 0:
             return ConstExpr(0)
+        elif isinstance(other, ConstExpr) and other.val == 1:
+            return self
         elif isinstance(other, ConstExpr) and other.val == 0:
             raise ValueError("Expr divided by 0.")
         else:
@@ -185,7 +187,7 @@ class Expr:
         a = wrap_number_as_const_expr(a)
         b = wrap_number_as_const_expr(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
-            return ConstExpr(math.ceil(a.val and b.val))
+            return ConstExpr(a.val and b.val)
         else:
             return BinaryExpr(a, b, Expr.AND)
 
@@ -194,7 +196,7 @@ class Expr:
         a = wrap_number_as_const_expr(a)
         b = wrap_number_as_const_expr(b)
         if isinstance(a, ConstExpr) and isinstance(b, ConstExpr):
-            return ConstExpr(math.ceil(a.val or b.val))
+            return ConstExpr(a.val or b.val)
         else:
             return BinaryExpr(a, b, Expr.OR)
     
@@ -266,9 +268,10 @@ class ConstExpr(Expr):
 class Range:
     CLOSED_OPEN = 0
     CLOSED_CLOSED = 1
-    def __init__(self, start, end, type=CLOSED_OPEN):
+    def __init__(self, start, end, stride=1, type=CLOSED_OPEN):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
+        self.stride = wrap_number_as_const_expr(stride)
         self.type = type
 
     @staticmethod
@@ -293,13 +296,18 @@ class Range:
     
     def normalize(self):
         shift = ConstExpr(0)
+        stride = ConstExpr(1)
         # TODO: fix this
         # if not self.start.same_as(ConstExpr(0)) and not self.is_single_point:
         if not self.start.same_as(ConstExpr(0)):
             shift = self.start
             self.end = self.end - self.start
             self.start = ConstExpr(0)
-        return shift
+        if not self.stride.same_as(ConstExpr(1)):
+            stride = self.stride
+            self.stride = ConstExpr(1)
+            self.end = self.end // stride
+        return shift, stride
 
 class IterVar(Expr):
     NORMAL = 0
@@ -311,10 +319,10 @@ class IterVar(Expr):
     VECTORIZED=5
     UNROLL=6
     REDUCE=7
-    def __init__(self, name, start=0, end=0, type=Range.CLOSED_OPEN):
+    def __init__(self, name, start=0, end=0, stride=1, type=Range.CLOSED_OPEN):
         super().__init__()
         self.name = name
-        self.range = Range(start, end, type)
+        self.range = Range(start, end, stride, type=type)
         self.attached_computation = []
         self.relation = IterVar.NORMAL
         self.type = IterVar.DEFAULT

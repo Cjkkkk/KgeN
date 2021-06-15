@@ -51,4 +51,5 @@ KgeN.bind(BTx, "threadIdx.x")
 KgeN.bind(BTy, "threadIdx.y")
 
 func = KgeN.lower(C)
+print(str(func))
 print(KgeN.build(func))

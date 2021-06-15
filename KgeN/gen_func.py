@@ -32,7 +32,7 @@ def add_reduce_init(tensor, fake_axis):
 
 def gen_stmt_for_tensor(tensor, stmt):
     def get_fake_axis():
-        axis = IterVar("", 0, 0, Range.CLOSED_CLOSED)
+        axis = IterVar("", 0, 0, type=Range.CLOSED_CLOSED)
         return axis
     fake_axis = get_fake_axis()
     # check if reduce init is needed
