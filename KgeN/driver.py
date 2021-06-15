@@ -6,18 +6,25 @@ from .sync_analysis import sync_analysis_pass
 from .utils import tensor_topo_sort_bottom_up
 from .inline_injection import inline_injection_pass
 from .expand import expand_pass
+from .tir import TensorExpr
 
-def lower(tensor):
-    tensor.scope = "global"
-    build_graph_pass(tensor)
-    tensors = tensor_topo_sort_bottom_up(tensor)
+def lower(bufs):
+    inputs = [t for t in bufs if t.type == TensorExpr.PLACEHOLDER]
+    outputs = [t for t in bufs if t.type == TensorExpr.COMPUTE]
+    for output in outputs:
+        output.scope = "global"
+    
+    assert(len(outputs) == 1, "only support one output.")
+    
+    build_graph_pass(outputs[0])
+    tensors = tensor_topo_sort_bottom_up(outputs[0])
     
     inline_injection_pass(tensors)
     infer_bound_pass(tensors)
     check_bound_pass(tensors)
     expand_pass(tensors)
 
-    func = gen_func_pass(tensors)
+    func = gen_func_pass(inputs, outputs, tensors)
     func = sync_analysis_pass(func)
     return func
 

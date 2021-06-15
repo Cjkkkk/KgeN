@@ -11,5 +11,5 @@ KgeN.reorder(C, C.axis[1], C.axis[0])
 KgeN.compute_at(B, C, C.axis[0])
 
 # lower
-func = KgeN.lower(C)
+func = KgeN.lower([A, C])
 print(str(func))

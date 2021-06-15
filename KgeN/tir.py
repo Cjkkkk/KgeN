@@ -439,6 +439,9 @@ class TensorExpr(Expr):
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice
 
+    def is_input(self):
+        return self.type == TensorExpr.PLACEHOLDER
+    
     def is_output(self):
         return len(self.outputs) == 0
 

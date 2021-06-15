@@ -94,6 +94,6 @@ KgeN.reorder(WW, ty, tx, yi, xi, ci, fi)
 KgeN.bind(ty, "threadIdx.y")
 KgeN.bind(tx, "threadIdx.x")
 
-func = KgeN.lower(B)
+func = KgeN.lower([A, W, B])
 print(str(func))
 print(KgeN.build(func))

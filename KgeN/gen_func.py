@@ -56,11 +56,11 @@ def gen_stmt_for_tensor(tensor, stmt):
     new_stmt = AssignStmt(dest, source)
     stmt.body.append(new_stmt)
         
-def gen_func_pass(tensors):
+def gen_func_pass(inputs, outputs, tensors):
     func_stmt = FuncStmt()
     func_stmt.storage = tensors
-    func_stmt.input_tensors = [tensor for tensor in tensors if tensor.type == TensorExpr.PLACEHOLDER]
-    func_stmt.output_tensors = [tensor for tensor in tensors if tensor.is_output()]
+    func_stmt.input_tensors = inputs
+    func_stmt.output_tensors = outputs
     for tensor in reversed(tensors):
         if tensor.type == TensorExpr.PLACEHOLDER or tensor.attached:
             continue
