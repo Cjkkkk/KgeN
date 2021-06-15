@@ -11,10 +11,10 @@ from .tir import TensorExpr
 def lower(bufs):
     inputs = [t for t in bufs if t.type == TensorExpr.PLACEHOLDER]
     outputs = [t for t in bufs if t.type == TensorExpr.COMPUTE]
+
+    assert(len(outputs) == 1, "only support one output.")
     for output in outputs:
         output.scope = "global"
-    
-    assert(len(outputs) == 1, "only support one output.")
     
     build_graph_pass(outputs[0])
     tensors = tensor_topo_sort_bottom_up(outputs[0])
