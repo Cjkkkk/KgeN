@@ -1,8 +1,8 @@
 from .tir import *
-from .visitor import RewriteExprVisitor
+from .visitor import RewriteVisitor
 from .expr_simplifier import expr_simplifier
 
-class ExprExpander(RewriteExprVisitor):  
+class Expander(RewriteVisitor):  
     def __init__(self):
         super().__init__()
     
@@ -20,10 +20,8 @@ class ExprExpander(RewriteExprVisitor):
         else:
             return expr
 
-expr_expander = ExprExpander()
+expr_expander = Expander()
 
-def expand_pass(tensors):
-    for tensor in tensors:
-        if tensor.type == TensorExpr.COMPUTE:
-            tensor.expr = expr_expander.rewrite(tensor.expr)
-            tensor.expr = expr_simplifier.rewrite(tensor.expr)
+def expand_pass(func):
+    func = expr_expander.rewrite(func)
+    return func

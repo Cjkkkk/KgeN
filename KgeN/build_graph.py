@@ -1,7 +1,7 @@
 from .tir import TensorExpr
-from .visitor import CollectExprVisitor
+from .visitor import CollectVisitor
 
-class CollectInputVisitor(CollectExprVisitor):
+class CollectInputVisitor(CollectVisitor):
     def __init__(self):
         super().__init__()
         self.inputs = set()

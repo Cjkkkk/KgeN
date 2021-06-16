@@ -22,9 +22,9 @@ def lower(bufs):
     inline_injection_pass(tensors)
     infer_bound_pass(tensors)
     check_bound_pass(tensors)
-    expand_pass(tensors)
 
     func = gen_func_pass(inputs, outputs, tensors)
+    func = expand_pass(func)
     func = sync_analysis_pass(func)
     return func
 

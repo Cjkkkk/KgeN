@@ -1,6 +1,6 @@
 from .te import compute
 from .tir import *
-from .visitor import RewriteExprVisitor
+from .visitor import RewriteVisitor
 from .utils import axis_topo_sort_top_down
 import math
 
@@ -106,7 +106,7 @@ def compute_inline(tensor):
     tensor.is_inline = True
 
 # rewrite dataflow for cache_read
-class RewriteDataFlowVisitor(RewriteExprVisitor):
+class RewriteDataFlowVisitor(RewriteVisitor):
     def __init__(self, map):
         super().__init__()
         self.map = map

@@ -1,5 +1,5 @@
 from .tir import *
-from .visitor import RewriteExprVisitor
+from .visitor import RewriteVisitor
 
 class Pattern(Expr):
     def __init__(self, cls_):
@@ -108,7 +108,7 @@ def reset_pattern(pattern):
         pattern.reset()
 
 
-class ExprSimplifier(RewriteExprVisitor):  
+class ExprSimplifier(RewriteVisitor):  
     def __init__(self):
         super().__init__()
     
@@ -133,8 +133,8 @@ class ExprSimplifier(RewriteExprVisitor):
                 expr = rewrite_if(expr, V1 + C1, V1, C1, lambda x: x.expr.val == 0)
 
                 expr = rewrite(expr, V1 + C1 + C2, V1 + (C1 + C2))
-                expr = rewrite(expr, C1 + (V1 - C2), V1 + (C1 - C2))
-                expr = rewrite(expr, C1 + (C2 - V1), (C1 + C2) - V1)
+                expr = rewrite(expr, (C1 - V1) + C2, (C1 + C2) - V1)
+                expr = rewrite(expr, (V1 - C1) + C2, V1 - (C1 - C2))
             elif expr.type == Expr.SUB:
                 # const folding
                 expr = rewrite(expr, V1 - V1, ConstExpr(0))

@@ -1,10 +1,10 @@
 from .utils import *
-from .visitor import RewriteExprVisitor
+from .visitor import RewriteVisitor
 from .expr_simplifier import expr_simplifier
 from .tir import Range
 
 # bound inference
-class RewriteIterVarVisitor(RewriteExprVisitor):
+class RewriteIterVarVisitor(RewriteVisitor):
     def __init__(self, map):
         super().__init__()
         self.map = map

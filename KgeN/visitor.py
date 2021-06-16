@@ -39,13 +39,28 @@ class Visitor:
         raise NotImplementedError
 
 
-class RewriteExprVisitor(Visitor):
+class RewriteVisitor(Visitor):
     def __init__(self):
         super().__init__()
     
     def rewrite(self, expr):
         expr = expr.accept(self)
         return expr
+    
+    def visit_func_stmt(self, stmt):
+        for i in range(len(stmt.body)):
+            stmt.body[i] = stmt.body[i].accept(self)
+        return stmt
+
+    def visit_assign_stmt(self, stmt):
+        stmt.dest = stmt.dest.accept(self)
+        stmt.source = stmt.source.accept(self)
+        return stmt
+
+    def visit_for_stmt(self, stmt):
+        for i in range(len(stmt.body)):
+            stmt.body[i] = stmt.body[i].accept(self)
+        return stmt
     
     def visit_binary_expr(self, expr):
         expr.left = expr.left.accept(self)
@@ -87,13 +102,25 @@ class RewriteExprVisitor(Visitor):
         return expr
 
 
-class CollectExprVisitor(Visitor):
+class CollectVisitor(Visitor):
     def __init__(self):
         super().__init__()
 
     def collect(self, expr):
         expr.accept(self)
-            
+    
+    def visit_func_stmt(self, stmt):
+        for st in stmt.body:
+            st.accept(self)
+
+    def visit_assign_stmt(self, stmt):
+        stmt.dest.accept(self)
+        stmt.src.accept(self)
+
+    def visit_for_stmt(self, stmt):
+        for st in stmt.body:
+            st.accept(self)
+    
     def visit_binary_expr(self, expr):
         expr.left.accept(self)
         expr.right.accept(self)

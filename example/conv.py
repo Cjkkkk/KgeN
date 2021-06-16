@@ -96,4 +96,4 @@ KgeN.bind(tx, "threadIdx.x")
 
 func = KgeN.lower([A, W, B])
 print(str(func))
-print(KgeN.build(func))
+# print(KgeN.build(func))
