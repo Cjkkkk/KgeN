@@ -24,4 +24,5 @@ expr_expander = Expander()
 
 def expand_pass(func):
     func = expr_expander.rewrite(func)
+    func = expr_simplifier.rewrite(func)
     return func
