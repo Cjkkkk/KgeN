@@ -1,4 +1,5 @@
 from .tir import *
+import math
 
 # compute primitives
 def var(name):
@@ -36,4 +37,14 @@ def reduce_min(expr, axis):
 def reduce_axis(end, name):
     axis = IterVar(name, 0, end)
     axis.type = IterVar.REDUCE
+    return axis
+
+def thread_axis(end=None, name=""):
+    if isinstance(end, str) and name == "":
+        end, name = None, end
+    if end is None:
+        end = math.inf
+    assert(name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"], "illegal binding name {}".format(name))
+    axis = IterVar(name, 0, end)
+    axis.type = IterVar.BIND
     return axis

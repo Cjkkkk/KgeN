@@ -49,6 +49,13 @@ num_thread = 8
 block_factor = 64
 step = 8
 
+# Get the GPU thread indices
+block_x = KgeN.thread_axis("blockIdx.x")
+block_y = KgeN.thread_axis("blockIdx.y")
+block_z = KgeN.thread_axis("blockIdx.z")
+thread_x = KgeN.thread_axis(num_thread, "threadIdx.x")
+thread_y = KgeN.thread_axis(num_thread, "threadIdx.y")
+
 hi, wi, fi, ni = B.axis
 bz = KgeN.fuse(B, hi, wi)
 by, fi = KgeN.split(B, fi, factor=block_factor)
@@ -59,11 +66,11 @@ KgeN.reorder(B, bz, by, bx, ty, tx, fi, ni)
 
 
 # Bind the iteration variables to GPU thread indices
-KgeN.bind(bz, "blockIdx.z")
-KgeN.bind(by, "blockIdx.y")
-KgeN.bind(bx, "blockIdx.x")
-KgeN.bind(ty, "threadIdx.y")
-KgeN.bind(tx, "threadIdx.x")
+KgeN.bind(bz, block_z)
+KgeN.bind(by, block_y)
+KgeN.bind(bx, block_x)
+KgeN.bind(ty, thread_y)
+KgeN.bind(tx, thread_x)
 
 
 # Schedule BL local write
@@ -83,16 +90,16 @@ yi, xi, ci, ni = AA.axis
 ty, ci = KgeN.split(AA, ci, nparts=num_thread)
 tx, ni = KgeN.split(AA, ni, nparts=num_thread)
 KgeN.reorder(AA, ty, tx, yi, xi, ci, ni)
-KgeN.bind(ty, "threadIdx.y")
-KgeN.bind(tx, "threadIdx.x")
+KgeN.bind(ty, thread_y)
+KgeN.bind(tx, thread_x)
 
 # Schedule for W's shared memory load
 yi, xi, ci, fi = WW.axis
 ty, ci = KgeN.split(WW, ci, nparts=num_thread)
 tx, fi = KgeN.split(WW, fi, nparts=num_thread)
 KgeN.reorder(WW, ty, tx, yi, xi, ci, fi)
-KgeN.bind(ty, "threadIdx.y")
-KgeN.bind(tx, "threadIdx.x")
+KgeN.bind(ty, thread_y)
+KgeN.bind(tx, thread_x)
 
 func = KgeN.lower([A, W, B])
 print(str(func))

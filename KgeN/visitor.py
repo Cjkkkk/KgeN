@@ -5,6 +5,9 @@ class Visitor:
     def visit_func_stmt(self, stmt):
         raise NotImplementedError
 
+    def visit_if_stmt(self, stmt):
+        raise NotImplementedError
+
     def visit_for_stmt(self, stmt):
         raise NotImplementedError
     
@@ -50,6 +53,13 @@ class RewriteVisitor(Visitor):
     def visit_func_stmt(self, stmt):
         for i in range(len(stmt.body)):
             stmt.body[i] = stmt.body[i].accept(self)
+        return stmt
+
+    def visit_if_stmt(self, stmt):
+        stmt.condition = stmt.condition.accept(self)
+        stmt.then_stmt = stmt.then_stmt.accept(self)
+        if stmt.else_stmt:
+            stmt.else_stmt = stmt.else_stmt.accept(self)
         return stmt
 
     def visit_assign_stmt(self, stmt):
@@ -113,6 +123,12 @@ class CollectVisitor(Visitor):
         for st in stmt.body:
             st.accept(self)
 
+    def visit_if_stmt(self, stmt):
+        stmt.condition.accept(self)
+        stmt.then_stmt.accept(self)
+        if stmt.else_stmt:
+            stmt.else_stmt.accept(self)
+    
     def visit_assign_stmt(self, stmt):
         stmt.dest.accept(self)
         stmt.src.accept(self)

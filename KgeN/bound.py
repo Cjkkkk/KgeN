@@ -47,9 +47,9 @@ def infer_root_iter_bound(tensor, rmap):
             for axis in tensor.attach_path:
                 # Do not treat certain axis as single point axis
                 # TODO: should this be necessary?
-                if tensor.scope == "global" and axis.bind_name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+                if tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
                     continue
-                if tensor.scope == "shared" and axis.bind_name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+                if tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
                     continue
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))

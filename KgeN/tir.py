@@ -326,7 +326,7 @@ class IterVar(Expr):
         self.attached_computation = []
         self.relation = IterVar.NORMAL
         self.type = IterVar.DEFAULT
-        self.bind_name = ""
+        self.bind_to = None
 
     def same_as(self, other):
         return self is other or (isinstance(other, IterVar) and self.name == other.name)
@@ -476,6 +476,16 @@ class FuncStmt(Stmt):
     def accept(self, visitor):
         return visitor.visit_func_stmt(self)
 
+class IfStmt(Stmt):
+    def __init__(self, condition, then_stmt, else_stmt=None):
+        super().__init__()
+        self.condition = condition
+        self.then_stmt = then_stmt
+        self.else_stmt = else_stmt
+
+    def accept(self, visitor):
+        return visitor.visit_if_stmt(self)
+    
 class ForStmt(Stmt):
     def __init__(self, iter_var):
         super().__init__()

@@ -1,12 +1,13 @@
 from .utils import tensor_topo_sort_bottom_up, axis_topo_sort_top_down
 from .tir import *
-from .visitor import Visitor
+from .visitor import CollectVisitor
 from .te import *
 from .schedule import *
 
 # codegen
-class IR_Printer(Visitor):
+class IR_Printer(CollectVisitor):
     def __init__(self):
+        super().__init__()
         self.scope = 0
         self.res = ""
         self.op_mapping = ["+", "*", "//", "/", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "-"]
@@ -45,12 +46,24 @@ class IR_Printer(Visitor):
         self.exit_scope()
         self.emit("}")
 
+    def visit_if_stmt(self, stmt):
+        self.emit("if ({0}) {{".format(stmt.condition.accept(self)))
+        self.enter_scope()
+        stmt.then_stmt.accept(self)
+        self.exit_scope()
+        if stmt.else_stmt:
+            self.emit("} else {")
+            self.enter_scope()
+            stmt.else_stmt.accept(self)
+            self.exit_scope()
+        self.emit("}")
+    
     def visit_assign_stmt(self, stmt):
         self.emit(stmt.dest.accept(self) + " = " + stmt.source.accept(self) + ";")
     
     def visit_for_stmt(self, stmt):
         var = stmt.iter_var
-        if not var.range.is_single_point and not var.type == IterVar.BIND:
+        if not var.range.is_single_point and var.bind_to is None:
             self.emit("for ({0}: {1}, {2}, {3}) {{".format(
                 var.name, 
                 var.range.start.accept(self),
@@ -61,7 +74,7 @@ class IR_Printer(Visitor):
         for st in stmt.body:
             st.accept(self)
         
-        if not var.range.is_single_point and not var.type == IterVar.BIND:
+        if not var.range.is_single_point and var.bind_to is None:
             self.exit_scope()
             self.emit("}")
     
@@ -82,8 +95,8 @@ class IR_Printer(Visitor):
     def visit_iter_expr(self, expr):
         if expr.range.is_single_point:
             return expr.range.start.accept(self)
-        elif expr.type == IterVar.BIND:
-            return expr.bind_name
+        elif expr.bind_to is not None:
+            return expr.bind_to.name
         elif expr.relation == IterVar.SPLIT:
             return "(({0} * {1}) + {2})".format(expr.split_outer.accept(self), expr.split_inner.range.end.accept(self), expr.split_inner.accept(self))
         elif expr.relation == IterVar.FUSE:
