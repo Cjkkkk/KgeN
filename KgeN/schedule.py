@@ -113,6 +113,10 @@ class RewriteDataFlowVisitor(RewriteVisitor):
         super().__init__()
         self.map = map
 
+    def rewrite(self, expr):
+        expr = expr.accept(self)
+        return expr
+    
     def visit_tensor_expr(self, expr):
         if expr in self.map:
             expr = self.map[expr]

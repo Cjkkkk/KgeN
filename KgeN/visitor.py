@@ -46,10 +46,6 @@ class RewriteVisitor(Visitor):
     def __init__(self):
         super().__init__()
     
-    def rewrite(self, expr):
-        expr = expr.accept(self)
-        return expr
-    
     def visit_func_stmt(self, stmt):
         for i in range(len(stmt.body)):
             stmt.body[i] = stmt.body[i].accept(self)
@@ -115,9 +111,6 @@ class RewriteVisitor(Visitor):
 class CollectVisitor(Visitor):
     def __init__(self):
         super().__init__()
-
-    def collect(self, expr):
-        expr.accept(self)
     
     def visit_func_stmt(self, stmt):
         for st in stmt.body:

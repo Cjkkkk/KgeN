@@ -1,5 +1,5 @@
 from .utils import *
-from .visitor import RewriteVisitor
+from .visitor import Visitor, RewriteVisitor
 from .expr_simplifier import expr_simplifier
 from .tir import Range
 
@@ -9,11 +9,76 @@ class RewriteIterVarVisitor(RewriteVisitor):
         super().__init__()
         self.map = map
 
+    def rewrite(self, expr):
+        expr = expr.accept(self)
+        return expr
+
     def visit_iter_expr(self, expr):
         if expr in self.map:
             expr = self.map[expr]
             expr = expr_simplifier.rewrite(expr)
         return expr
+
+class BoundEvaluator(Visitor):
+    def __init__(self):
+        super().__init__()
+        self.rmap = None
+        self.relax_set = None
+
+    def evaluate(self, expr, rmap, relax_set):
+        self.rmap = rmap
+        self.relax_set = relax_set
+        return expr.accept(self)
+    
+    def visit_binary_expr(self, expr):
+        left = expr.left.accept(self)
+        right = expr.right.accept(self)
+        if expr.type == Expr.ADD:
+            interval = Range(left.start + right.start, left.end + right.end, type=Range.CLOSED_CLOSED)
+        elif expr.type == Expr.SUB:
+            interval = Range(left.start - right.start, left.end - right.end, type=Range.CLOSED_CLOSED)
+        elif expr.type == Expr.MUL:
+            interval = Range(left.start * right.start, left.end * right.end, type=Range.CLOSED_CLOSED)
+        elif expr.type == Expr.FLOOR_DIV or expr.type == Expr.CEIL_DIV: # TODO: fix this
+            interval = Range(left.start // right.start, left.end // right.end, type=Range.CLOSED_CLOSED)
+        elif expr.type == Expr.MOD:
+            interval = Range(left.start % right.start, left.end % right.end, type=Range.CLOSED_CLOSED)
+        elif expr.type == Expr.MIN:
+            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type=Range.CLOSED_CLOSED)
+        elif expr.type == Expr.MAX:
+            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type=Range.CLOSED_CLOSED)
+        else:
+            raise ValueError("Unsupported op type {}.".format(expr.type))
+        return interval
+
+    def visit_if_then_else_expr(self, expr):
+        then_interval = expr.then_expr.accept(self)
+        else_interval = expr.else_expr.accept(self)
+        interval = consolidate_range(then_interval, else_interval)
+        return interval
+    
+    def visit_unary_expr(self, expr):
+        if expr.type == Expr.NEG:
+            inner = expr.expr.accept(self)
+            interval = Range(- inner.end, - inner.start, type=Range.CLOSED_CLOSED)
+        else:
+            raise ValueError("Unsupported op type {}.".format(expr.type))
+        return interval
+
+    def visit_var_expr(self, expr):
+        return Range(expr, expr, type=Range.CLOSED_CLOSED)
+
+    def visit_const_expr(self, expr):
+        return Range(expr, expr, type=Range.CLOSED_CLOSED)
+
+    def visit_iter_expr(self, expr):
+        # convert to closed closed interval
+        interval = Range(self.rmap[expr].start, expr_simplifier.rewrite(self.rmap[expr].end - 1), type=Range.CLOSED_CLOSED)
+        if expr in self.relax_set:
+            interval = Range(interval.start.accept(self).start, interval.end.accept(self).end, type=Range.CLOSED_CLOSED)
+        return interval
+
+bound_evaluator = BoundEvaluator()
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
     res = [bound.normalize() for bound in bounds]
@@ -53,8 +118,7 @@ def infer_root_iter_bound(tensor, rmap):
                     continue
                 rmap[axis] = Range.single_point(axis)
             pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
-        # for axis in rmap:
-        #     print(axis, rmap[axis])
+
         # step 2: calculate bound of producer
         for output in tensor.outputs:
             for provider in output.providers[tensor]:
@@ -64,7 +128,7 @@ def infer_root_iter_bound(tensor, rmap):
                     # tensor is not attached at current provider
                     for axis in output.root_axis:
                         relax_set.add(axis)
-                new_bounds = [evaluate_expr_bound(index, rmap, relax_set) for index in provider.index]
+                new_bounds = [bound_evaluator.evaluate(index, rmap, relax_set) for index in provider.index]
                 
                 if bounds is None:
                     bounds = new_bounds
@@ -114,7 +178,7 @@ def pass_up(rmap, axis_tuple):
             if rmap[axis.split_outer].is_single_point and rmap[axis.split_inner].is_single_point:
                 rmap[axis] = Range.single_point(axis)
             else:
-                rmap[axis] = evaluate_expr_bound(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {})
+                rmap[axis] = bound_evaluator.evaluate(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {})
                 rmap[axis].as_closed_open()
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis.fused].is_single_point:
@@ -146,52 +210,6 @@ def create_attach_path(tensor):
         cur_tensor = cur_tensor.attach_at
     tensor.attach_path = tuple(attach_path)
 
-
-def evaluate_expr_bound(expr, rmap, relax_set):
-    if isinstance(expr, IterVar):
-        # convert to closed closed interval
-        interval = Range(rmap[expr].start, expr_simplifier.rewrite(rmap[expr].end - 1), type=Range.CLOSED_CLOSED)
-        if expr in relax_set:
-            interval = Range(evaluate_expr_bound(interval.start, rmap, relax_set).start, evaluate_expr_bound(interval.end, rmap, relax_set).end, type=Range.CLOSED_CLOSED)
-    
-    elif isinstance(expr, BinaryExpr):
-        left = evaluate_expr_bound(expr.left, rmap, relax_set)
-        right = evaluate_expr_bound(expr.right, rmap, relax_set)
-        if expr.type == Expr.ADD:
-            interval = Range(left.start + right.start, left.end + right.end, type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.SUB:
-            interval = Range(left.start - right.start, left.end - right.end, type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.MUL:
-            interval = Range(left.start * right.start, left.end * right.end, type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.FLOOR_DIV or expr.type == Expr.CEIL_DIV: # TODO: fix this
-            interval = Range(left.start // right.start, left.end // right.end, type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.MOD:
-            interval = Range(left.start % right.start, left.end % right.end, type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.MIN:
-            interval = Range(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type=Range.CLOSED_CLOSED)
-        elif expr.type == Expr.MAX:
-            interval = Range(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type=Range.CLOSED_CLOSED)
-        else:
-            raise ValueError("Unsupported op type {}.".format(expr.type))
-    elif isinstance(expr, UnaryExpr):
-        if expr.type == Expr.NEG:
-            inner = evaluate_expr_bound(expr.expr, rmap, relax_set)
-            interval = Range(- inner.end, - inner.start, type=Range.CLOSED_CLOSED)
-        else:
-            raise ValueError("Unsupported op type {}.".format(expr.type))
-    elif isinstance(expr, IfThenElseExpr):
-        # TODO: fix ifThenElseExpr
-        then_interval = evaluate_expr_bound(expr.then_expr, rmap, relax_set)
-        else_interval = evaluate_expr_bound(expr.else_expr, rmap, relax_set)
-        interval = consolidate_range(then_interval, else_interval)
-    elif isinstance(expr, TensorSliceExpr):
-        # TODO: fix TensorSliceExpr
-        pass
-    elif isinstance(expr, ConstExpr) or isinstance(expr, VarExpr):
-        interval = Range(expr, expr, type=Range.CLOSED_CLOSED)
-    else:
-        raise ValueError("Unsupported expr type {}".format(type(expr)))
-    return interval
 
 def bind_to_axis(rmap, axis_sort):
     for axis in axis_sort:

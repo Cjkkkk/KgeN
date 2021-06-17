@@ -112,6 +112,10 @@ class ExprSimplifier(RewriteVisitor):
     def __init__(self):
         super().__init__()
     
+    def rewrite(self, expr):
+        expr = expr.accept(self)
+        return expr
+    
     def visit_binary_expr(self, expr):
         # TODO: move this to __init__ ?
         C1 = Pattern(ConstExpr)

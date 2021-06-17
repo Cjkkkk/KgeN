@@ -6,6 +6,10 @@ class Expander(RewriteVisitor):
     def __init__(self):
         super().__init__()
     
+    def rewrite(self, expr):
+        expr = expr.accept(self)
+        return expr
+
     def visit_iter_expr(self, expr):
         if expr.range.is_single_point:
             return expr.range.start
