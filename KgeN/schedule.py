@@ -1,3 +1,4 @@
+from tvm import te
 from tvm.tir.expr import Reduce
 from .te import compute
 from .tir import *
@@ -5,12 +6,11 @@ from .visitor import RewriteVisitor
 from .utils import axis_topo_sort_top_down
 import math
 
-global_cache_map = {}
 
 # schedule primitives
 def check_tensor_and_axis(tensor, *axis):
     assert isinstance(tensor, TensorExpr), "Expect TensorExpr not {0}".format(type(tensor))
-    
+
     for ax in axis:
         assert ax in tensor.axis, "{0} is not {1}'s axis".format(ax.name, tensor.name)
 
@@ -109,9 +109,15 @@ def compute_inline(tensor):
 
 # rewrite dataflow for cache_read
 class RewriteDataFlowVisitor(RewriteVisitor):
-    def __init__(self, map):
+    def __init__(self):
         super().__init__()
-        self.map = map
+        self.map = {}
+
+    def add_mapping(self, tensor, cache_tensor):
+        self.map[tensor] = cache_tensor
+        for k, v in self.map.items():
+            if tensor is v:
+                self.map[k] = cache_tensor
 
     def rewrite(self, expr):
         expr = expr.accept(self)
@@ -122,6 +128,8 @@ class RewriteDataFlowVisitor(RewriteVisitor):
             expr = self.map[expr]
         return expr
 
+dataflow_rewriter = RewriteDataFlowVisitor()
+
 def cache_read(tensor, scope, readers):
     cache_tensor_name = tensor.name + "_" + scope
     lambda_str = "def _ ({0}): return tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))
@@ -129,24 +137,18 @@ def cache_read(tensor, scope, readers):
     exec(lambda_str, {"tensor": tensor}, local_vars)
     compiled = local_vars["_"]
     cache_tensor = compute(tensor.shape, compiled, cache_tensor_name, scope)
-
-    global_cache_map[tensor] = cache_tensor
-    for k, v in global_cache_map.items():
-        if tensor is v:
-            global_cache_map[k] = cache_tensor
+    dataflow_rewriter.add_mapping(tensor, cache_tensor)
     
     # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
     for reader in readers:
-        visitor = RewriteDataFlowVisitor(global_cache_map)
-        reader.expr = visitor.rewrite(reader.expr)
+        reader.expr = dataflow_rewriter.rewrite(reader.expr)
     return cache_tensor
 
 def cache_write(tensor, scope):
     # TODO: fix compute, use local
     cache_tensor_name = tensor.name + "_" + scope
     cache_tensor = compute(tensor.shape, tensor.compute_func, cache_tensor_name, scope)
-    visitor = RewriteDataFlowVisitor(global_cache_map)
-    cache_tensor.expr = visitor.rewrite(cache_tensor.expr)
+    cache_tensor.expr = dataflow_rewriter.rewrite(cache_tensor.expr)
     
     # change tensor's compute_func
     lambda_str = "def _ ({0}): return cache_tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))

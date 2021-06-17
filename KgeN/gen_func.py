@@ -35,11 +35,13 @@ def gen_stmt_for_tensor(tensor, stmt):
         axis = IterVar("", 0, 0, type=Range.CLOSED_CLOSED)
         return axis
     fake_axis = get_fake_axis()
+    # add fake axis to express compute at root
+    tensor.axis = [fake_axis] + tensor.axis
     # check if reduce init is needed
     add_reduce_init(tensor, fake_axis)
     
     # generate for stmt
-    for axis in [fake_axis] + tensor.axis:
+    for axis in tensor.axis:
         new_stmt = ForStmt(axis)
         stmt.body.append(new_stmt)
         stmt = new_stmt
