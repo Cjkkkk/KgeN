@@ -9,15 +9,15 @@ global_cache_map = {}
 
 # schedule primitives
 def check_tensor_and_axis(tensor, *axis):
-    assert(isinstance(tensor, TensorExpr), "Expect TensorExpr not {0}".format(type(tensor)))
+    assert isinstance(tensor, TensorExpr), "Expect TensorExpr not {0}".format(type(tensor))
     
     for ax in axis:
-        assert(ax in tensor.axis, "{0} is not {1}'s axis".format(ax.name, tensor.name))
+        assert ax in tensor.axis, "{0} is not {1}'s axis".format(ax.name, tensor.name)
 
 def bind(ax, thread_axis):
-    assert(thread_axis.type == IterVar.BIND, "should provide thread_axis.")
-    assert(ax.bind_to is None, "already bind to another thread axis {}".format(ax.bind_to.name))
-    assert(ax.type == IterVar.DEFAULT or ax.type == IterVar.REDUCE, "can not bind axis of {} type".format(ax.type))
+    assert thread_axis.type == IterVar.BIND, "should provide thread_axis."
+    assert ax.bind_to is None, "already bind to another thread axis {}".format(ax.bind_to.name)
+    assert ax.type == IterVar.DEFAULT or ax.type == IterVar.REDUCE, "can not bind axis of {} type".format(ax.type)
     ax.bind_to = thread_axis
 
 def split(tensor, ax, factor=-1, nparts=-1):

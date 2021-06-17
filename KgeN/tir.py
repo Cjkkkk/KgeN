@@ -237,6 +237,9 @@ class BinaryExpr(Expr):
     def same_as(self, other):
         return self is other or (isinstance(other, BinaryExpr) and self.type == other.type and self.left.same_as(other.left) and self.right.same_as(other.right))
 
+    def is_compare(self):
+        return self.type == Expr.GE or self.type == Expr.GT or self.type == Expr.LE or self.type == Expr.LT
+    
     def accept(self, visitor):
         return visitor.visit_binary_expr(self)
 
@@ -344,7 +347,7 @@ class ReduceExpr(Expr):
         axis_tuple = axis if isinstance(axis, tuple) else (axis, )
         
         for axis in axis_tuple:
-            assert(axis.type == IterVar.REDUCE, "axis {0} must be reduce axis.".format(axis.name))
+            assert axis.type == IterVar.REDUCE, "axis {0} must be reduce axis.".format(axis.name)
         self.reduce_axis = axis_tuple
     
     def same_as(self):
@@ -434,7 +437,7 @@ class TensorExpr(Expr):
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
-        assert(len(index) == len(self.root_axis), "should provide exactly {0} axis, got {1}.".format(len(self.root_axis), len(index)))
+        assert len(index) == len(self.root_axis), "should provide exactly {0} axis, got {1}.".format(len(self.root_axis), len(index))
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice

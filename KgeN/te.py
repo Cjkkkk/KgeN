@@ -16,7 +16,7 @@ def if_then_else(condition, then_expr, else_expr):
     return IfThenElseExpr(condition, then_expr, else_expr)
 
 def all(*condition):
-    assert(len(condition) > 1, "provide at least two condition, got {}".format(len(condition)))
+    assert len(condition) > 1, "provide at least two condition, got {}".format(len(condition))
     expr = condition[0]
     for condition in condition[1:]:
         expr = Expr.and_(expr, condition)
@@ -44,7 +44,7 @@ def thread_axis(end=None, name=""):
         end, name = None, end
     if end is None:
         end = math.inf
-    assert(name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"], "illegal binding name {}".format(name))
+    assert name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"], "illegal binding name {}".format(name)
     axis = IterVar(name, 0, end)
     axis.type = IterVar.BIND
     return axis

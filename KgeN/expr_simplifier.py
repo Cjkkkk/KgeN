@@ -159,12 +159,18 @@ class ExprSimplifier(RewriteVisitor):
                 expr = rewrite(expr, (V1 + V2) * C1, V1 * C1 + V2 * C1)
                 expr = rewrite(expr, (V1 - V2) * C1, V1 * C1 - V2 * C1)
                 expr = rewrite(expr, (V1 * C1) * C2, V1 * (C1 * C2))
+            
             elif expr.type == Expr.MIN:
                 expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
                 expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
+            
             elif expr.type == Expr.MAX:
                 expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
                 expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
+            
+            elif expr.is_compare():
+                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 + C1, C2), Expr.function_mapping[expr.type](V1, C2 - C1))
+                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 - C1, C2), Expr.function_mapping[expr.type](V1, C2 + C1))
             
             if old_expr.same_as(expr):
                 return expr
