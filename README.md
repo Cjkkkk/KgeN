@@ -45,6 +45,7 @@ A TVM-like CUDA code generator.
 - [ ] consider hash expr to avoid same_as overhead, make expr attribute immutable to make sure re-hash
 - [ ] consider if_then_else when evaluate bound
 - [ ] check if thread range equals to axis range after infer bound
+- [ ] add interval set
 
 # example
 ```
