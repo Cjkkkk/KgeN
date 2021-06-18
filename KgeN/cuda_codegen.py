@@ -10,7 +10,7 @@ class CUDA_code_generator(IR_Printer):
         super().__init__()
         self.scope = 0
         self.res = ""
-        self.op_mapping = ["+", "*", "/", "/", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "-"]
+        self.op_mapping = ["+", "*", "/", "/", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "!", "-"]
 
     def generate_signature(self, func_stmt):
         self.emit("__global__ void kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))

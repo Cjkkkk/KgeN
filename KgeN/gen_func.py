@@ -1,4 +1,4 @@
-from .tir import ForStmt, FuncStmt, AssignStmt, IterVar, Range, ReduceExpr, TensorSliceExpr, TensorExpr
+from .tir import ForStmt, FuncStmt, AssignStmt, IterVar, Interval, ReduceExpr, TensorSliceExpr, TensorExpr
 from .utils import axis_topo_sort_top_down
 from .schedule import compute_at
 
@@ -32,7 +32,7 @@ def add_reduce_init(tensor, fake_axis):
 
 def gen_stmt_for_tensor(tensor, stmt):
     def get_fake_axis():
-        axis = IterVar("", 0, 0, type=Range.CLOSED_CLOSED)
+        axis = IterVar("", 0, 0, type=Interval.CLOSED_CLOSED)
         return axis
     fake_axis = get_fake_axis()
     # add fake axis to express compute at root

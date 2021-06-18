@@ -23,9 +23,10 @@ class Expr:
     CEIL_DIV = 12
     AND = 13
     OR = 14
-    NEG = 15
-    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "-"]
-
+    NOT = 14
+    NEG = 16
+    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "!", "-"]
+    
     def __add__(self, other):
         # TODO: add expr simpifier here
         other = wrap_number_as_const_expr(other)
@@ -200,6 +201,14 @@ class Expr:
         else:
             return BinaryExpr(a, b, Expr.OR)
     
+    @staticmethod
+    def not_(a):
+        a = wrap_number_as_const_expr(a)
+        if isinstance(a, ConstExpr):
+            return ConstExpr(not a.val)
+        else:
+            return UnaryExpr(a, Expr.NOT)
+
     def __str__(self):
         from .ir_printer import IR_Printer
         ir_printer = IR_Printer()
@@ -212,7 +221,7 @@ class Expr:
         raise NotImplementedError
 
 Expr.function_mapping = [Expr.__add__, Expr.__mul__, Expr.__truediv__, Expr.__floordiv__, Expr.__sub__, Expr.__mod__, Expr.__gt__,
-        Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.and_, Expr.or_, Expr.__neg__]
+        Expr.__ge__, Expr.__lt__, Expr.__le__, Expr.min, Expr.max, Expr.ceildiv, Expr.and_, Expr.or_, Expr.not_, Expr.__neg__]
 
 
 class UnaryExpr(Expr):
@@ -267,8 +276,13 @@ class ConstExpr(Expr):
     def accept(self, visitor):
         return visitor.visit_const_expr(self)
 
+def union_interval(a, b):
+    return Interval(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type=Interval.CLOSED_CLOSED)
 
-class Range:
+def intersect_interval(a, b):
+    return Interval(Expr.max(a.start, b.start), Expr.min(a.end, b.end), type=Interval.CLOSED_CLOSED)
+
+class Interval:
     CLOSED_OPEN = 0
     CLOSED_CLOSED = 1
     def __init__(self, start, end, stride=1, type=CLOSED_OPEN):
@@ -279,22 +293,22 @@ class Range:
 
     @staticmethod
     def single_point(expr):
-        interval = Range(expr, expr + 1)
+        interval = Interval(expr, expr + 1)
         return interval
 
     @property
     def is_single_point(self):
-        if self.type == Range.CLOSED_CLOSED:
+        if self.type == Interval.CLOSED_CLOSED:
             return self.start.same_as(self.end)
         else:
             return (self.start + 1).same_as(self.end)
 
     def __str__(self):
-        return "[{0}, {1} {2}".format(self.start, self.end, "]" if self.type == Range.CLOSED_CLOSED else ")")
+        return "[{0}, {1}{2}".format(self.start, self.end, "]" if self.type == Interval.CLOSED_CLOSED else ")")
     
     def as_closed_open(self):
-        if self.type == Range.CLOSED_CLOSED:
-            self.type = Range.CLOSED_OPEN
+        if self.type == Interval.CLOSED_CLOSED:
+            self.type = Interval.CLOSED_OPEN
             self.end += 1
     
     def normalize(self):
@@ -312,6 +326,10 @@ class Range:
             self.end = self.end // stride
         return shift, stride
 
+class IntervalSet:
+    def __init__(self, *intervals):
+        self.intervals = list(intervals)
+
 class IterVar(Expr):
     NORMAL = 0
     SPLIT = 1
@@ -322,10 +340,10 @@ class IterVar(Expr):
     VECTORIZED=5
     UNROLL=6
     REDUCE=7
-    def __init__(self, name, start=0, end=0, stride=1, type=Range.CLOSED_OPEN):
+    def __init__(self, name, start=0, end=0, stride=1, type=Interval.CLOSED_OPEN):
         super().__init__()
         self.name = name
-        self.range = Range(start, end, stride, type=type)
+        self.range = Interval(start, end, stride, type=type)
         self.attached_computation = []
         self.relation = IterVar.NORMAL
         self.type = IterVar.DEFAULT

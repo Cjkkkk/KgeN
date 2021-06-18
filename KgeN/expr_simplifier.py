@@ -74,20 +74,28 @@ def rewrite_recursive(expr, pattern, result):
         expr = new_expr
     return expr
 
-def rewrite_recursive_if(expr, pattern, result, arg, condition):
+def rewrite_recursive_if(expr, pattern, result, condition):
     while True:
-        new_expr = rewrite_if(expr, pattern, result, arg, condition)
+        new_expr = rewrite_if(expr, pattern, result, condition)
         if new_expr.same_as(expr):
             break
         expr = new_expr
     return expr
 
-def rewrite_if(expr, pattern, result, arg, condition):
+def rewrite_if(expr, pattern, then, condition):
     ans = real_match(expr, pattern)
-    if not isinstance(arg, tuple):
-        arg = (arg, )
-    if ans and condition(*arg):
-        expr = eval_result(result)
+    if ans and condition():
+        expr = eval_result(then)
+    reset_pattern(pattern)
+    return expr
+
+def rewrite_if_else(expr, pattern, then, else_, condition):
+    ans = real_match(expr, pattern)
+    if ans:
+        if condition():
+            expr = eval_result(then)
+        else:
+            expr = eval_result(else_)
     reset_pattern(pattern)
     return expr
 
@@ -134,47 +142,57 @@ class ExprSimplifier(RewriteVisitor):
 
                 # const folding
                 expr = rewrite(expr, C1 + C2, C1 + C2)
-                expr = rewrite_if(expr, V1 + C1, V1, C1, lambda x: x.expr.val == 0)
+                expr = rewrite_if(expr, V1 + C1, V1, lambda: C1.expr.val == 0)
 
                 expr = rewrite(expr, V1 + C1 + C2, V1 + (C1 + C2))
                 expr = rewrite(expr, (C1 - V1) + C2, (C1 + C2) - V1)
                 expr = rewrite(expr, (V1 - C1) + C2, V1 - (C1 - C2))
+
             elif expr.type == Expr.SUB:
                 # const folding
                 expr = rewrite(expr, V1 - V1, ConstExpr(0))
                 expr = rewrite(expr, C1 - C2, C1 - C2)
-                expr = rewrite_if(expr, V1 - C1, V1, C1, lambda x: x.expr.val == 0)
+                expr = rewrite_if(expr, V1 - C1, V1, lambda: C1.expr.val == 0)
 
                 expr = rewrite(expr, (V1 + V2) - (V1 + V3), (V2 - V3))
+                expr = rewrite(expr, V1 + (V2 + V3) - V2, V1 + V3)
                 expr = rewrite(expr, (V1 + V2) - V1, V2)
                 expr = rewrite(expr, (V1 + V2) - V2, V1)
                 expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
                 expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
+
             elif expr.type == Expr.MUL:
                 expr = rewrite(expr, C1 * V1, V1 * C1)
                 expr = rewrite(expr, V1 * C1 * V2, V1 * V2 * C1)
 
                 # const folding
                 expr = rewrite(expr, C1 * C2, C1 * C2)
-                expr = rewrite_if(expr, V1 * C1, V1, C1, lambda x: x.expr.val == 1)
-                expr = rewrite_if(expr, V1 * C1, ConstExpr(0), C1, lambda x: x.expr.val == 0)
+                expr = rewrite_if(expr, V1 * C1, V1, lambda: C1.expr.val == 1)
+                expr = rewrite_if(expr, V1 * C1, ConstExpr(0), lambda: C1.expr.val == 0)
 
-                # expr = rewrite(expr, (V1 + C1) * C2, V1 * C2 + C1 * C2)
                 expr = rewrite(expr, (V1 + V2) * C1, V1 * C1 + V2 * C1)
                 expr = rewrite(expr, (V1 - V2) * C1, V1 * C1 - V2 * C1)
                 expr = rewrite(expr, (V1 * C1) * C2, V1 * (C1 * C2))
             
             elif expr.type == Expr.MIN:
-                expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
-                expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, C1, lambda x: x.expr.val > 0)
+                expr = rewrite(expr, Expr.min(V1, V1), V1)
+                expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, lambda: C1.expr.val > 0)
+                expr = rewrite_if(expr, Expr.min(V1, V1 + C1), V1, lambda: C1.expr.val > 0)
+                expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, lambda: C1.expr.val > 0)
+                expr = rewrite_if(expr, Expr.min(V1, V1 - C1), V1 - C1, lambda: C1.expr.val > 0)
             
             elif expr.type == Expr.MAX:
-                expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, C1, lambda x: x.expr.val > 0)
-                expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, C1, lambda x: x.expr.val > 0)
+                expr = rewrite(expr, Expr.max(V1, V1), V1)
+                expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, lambda: C1.expr.val > 0)
+                expr = rewrite_if(expr, Expr.max(V1, V1 + C1), V1 + C1, lambda: C1.expr.val > 0)
+                expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, lambda: C1.expr.val > 0)
+                expr = rewrite_if(expr, Expr.max(V1, V1 - C1), V1, lambda: C1.expr.val > 0)
             
             elif expr.is_compare():
                 expr = rewrite(expr, Expr.function_mapping[expr.type](V1 + C1, C2), Expr.function_mapping[expr.type](V1, C2 - C1))
                 expr = rewrite(expr, Expr.function_mapping[expr.type](V1 - C1, C2), Expr.function_mapping[expr.type](V1, C2 + C1))
+                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 * C1, C2), Expr.function_mapping[expr.type](V1, C2 / C1))
+                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 / C1, C2), Expr.function_mapping[expr.type](V1, C2 * C1))
             
             if old_expr.same_as(expr):
                 return expr
@@ -214,5 +232,5 @@ if __name__ == "__main__":
     print(expr)
 
     expr = Expr.min(IterVar("x") + ConstExpr(1), IterVar("x"))
-    expr = rewrite_recursive_if(expr, Expr.min(V1 + C1, V1), V1, C1, lambda x: x.expr.val > 0)
+    expr = rewrite_recursive_if(expr, Expr.min(V1 + C1, V1), V1, lambda: C1.expr.val > 0)
     print(expr)

@@ -10,7 +10,7 @@ class IR_Printer(CollectVisitor):
         super().__init__()
         self.scope = 0
         self.res = ""
-        self.op_mapping = ["+", "*", "//", "/", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "-"]
+        self.op_mapping = ["+", "*", "//", "/", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "!", "-"]
     
     def emit(self, str):
         self.res += self.scope * "    " + str + "\n"

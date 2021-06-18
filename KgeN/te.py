@@ -1,4 +1,6 @@
 from .tir import *
+from .constraint import constraint_evaluator
+from .expr_simplifier import expr_simplifier
 import math
 
 # compute primitives
@@ -13,7 +15,14 @@ def compute(shape, function, name, scope="local"):
     return tensor
 
 def if_then_else(condition, then_expr, else_expr):
-    return IfThenElseExpr(condition, then_expr, else_expr)
+    expr = IfThenElseExpr(condition, then_expr, else_expr)
+    expr.condition = expr_simplifier.rewrite(condition)
+    
+    constraint = constraint_evaluator.evaluator(expr.condition)
+    expr.then_expr.constraint = constraint
+    # TODO:
+    # add constraint to else expr and recursively add to sub expr
+    return expr
 
 def all(*condition):
     assert len(condition) > 1, "provide at least two condition, got {}".format(len(condition))
