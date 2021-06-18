@@ -18,10 +18,12 @@ def if_then_else(condition, then_expr, else_expr):
     expr = IfThenElseExpr(condition, then_expr, else_expr)
     expr.condition = expr_simplifier.rewrite(condition)
     
-    constraint = constraint_evaluator.evaluator(expr.condition)
-    expr.then_expr.constraint = constraint
+    then_constraint = constraint_evaluator.evaluator(expr.condition)
+    else_constraint = constraint_evaluator.evaluator(Expr.not_(expr.condition))
+    expr.then_expr.constraint = then_constraint
+    expr.else_expr.constraint = else_constraint
     # TODO:
-    # add constraint to else expr and recursively add to sub expr
+    # recursively add to sub expr
     return expr
 
 def all(*condition):
