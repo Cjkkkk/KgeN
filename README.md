@@ -38,7 +38,7 @@ A TVM-like CUDA code generator.
 - [x] add unroll
 - [x] split nparts
 - [x] KgeN.all for padding
-- [ ] conv example
+- [x] conv example
 - [x] tir print
 - [ ] compute inline
 - [x] default scope for placeholder is global, for compute is local
@@ -46,6 +46,8 @@ A TVM-like CUDA code generator.
 - [ ] consider if_then_else when evaluate bound
 - [ ] check if thread range equals to axis range after infer bound
 - [ ] add interval set
+- [ ] move const folding from tir to expr_simplifier?
+- [ ] add host code
 
 # example
 ```

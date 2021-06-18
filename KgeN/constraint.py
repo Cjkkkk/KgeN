@@ -45,10 +45,17 @@ class ConstraintEvaluator(RewriteVisitor):
         if expr.type == Expr.Not:
             map = expr.expr.accept(self)
             for var in map:
-                if map[var].start.same_as(ConstExpr(-math.inf)):
+                if map[var].start.same_as(ConstExpr(-math.inf)) and map[var].end.same_as(ConstExpr(math.inf)):
+                    map[var] = Interval(math.inf, -math.inf, type=Interval.CLOSED_CLOSED)
+                elif map[var].start.same_as(ConstExpr(-math.inf)):
                     map[var] = Interval(map[var].end + 1, math.inf, type=Interval.CLOSED_CLOSED)
                 elif map[var].end.same_as(ConstExpr(math.inf)):
                     map[var] = Interval(-math.inf, map[var].start - 1, type=Interval.CLOSED_CLOSED)
+                else:
+                    # TODO: fix this
+                    # right now not [5, 10] return (-inf, inf) instead of (-inf, 5) (10, inf)
+                    # because we don't have interval set
+                    map[var] = Interval(-math.inf, math.inf, type=Interval.CLOSED_CLOSED)
             return map
         else:
             raise ValueError("unsupported type.")

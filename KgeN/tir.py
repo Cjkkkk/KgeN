@@ -25,7 +25,6 @@ class Expr:
     OR = 14
     NOT = 14
     NEG = 16
-    mapping = ["+", "*", "/", "//", "-", "%", ">", ">=", "<", "<=", "min", "max", "ceildiv", "&&", "||", "!", "-"]
     
     def __add__(self, other):
         # TODO: add expr simpifier here
@@ -297,6 +296,10 @@ class Interval:
         return interval
 
     @property
+    def is_all(self):
+        return self.start.same_as(ConstExpr(-math.inf)) and self.end.same_as(ConstExpr(math.inf))
+
+    @property
     def is_single_point(self):
         if self.type == Interval.CLOSED_CLOSED:
             return self.start.same_as(self.end)
@@ -311,6 +314,11 @@ class Interval:
             self.type = Interval.CLOSED_OPEN
             self.end += 1
     
+    def as_closed_closed(self):
+        if self.type == Interval.CLOSED_OPEN:
+            self.type = Interval.CLOSED_CLOSED
+            self.end -= 1
+
     def normalize(self):
         shift = ConstExpr(0)
         stride = ConstExpr(1)
@@ -326,6 +334,7 @@ class Interval:
             self.end = self.end // stride
         return shift, stride
 
+# TODO: implement this
 class IntervalSet:
     def __init__(self, *intervals):
         self.intervals = list(intervals)

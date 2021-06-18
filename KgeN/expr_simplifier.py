@@ -132,89 +132,85 @@ class ExprSimplifier(RewriteVisitor):
         V2 = Pattern(Expr)
         V3 = Pattern(Expr)
         old_expr = expr
-        while True:
-            expr.left = expr.left.accept(self)
-            expr.right = expr.right.accept(self)
-            if expr.type == Expr.ADD:
-                expr = rewrite(expr, C1 + V1, V1 + C1)
-                expr = rewrite(expr, V1 + C1 + V2, V1 + V2 + C1)
-                # expr = rewrite(expr, V1 + (V2 + V3), V1 + V2 + V3)
+        
+        expr.left = expr.left.accept(self)
+        expr.right = expr.right.accept(self)
+        if expr.type == Expr.ADD:
+            expr = rewrite(expr, C1 + V1, V1 + C1)
+            expr = rewrite(expr, V1 + C1 + V2, V1 + V2 + C1)
+            # expr = rewrite(expr, V1 + (V2 + V3), V1 + V2 + V3)
 
-                # const folding
-                expr = rewrite(expr, C1 + C2, C1 + C2)
-                expr = rewrite_if(expr, V1 + C1, V1, lambda: C1.expr.val == 0)
+            # const folding
+            expr = rewrite(expr, C1 + C2, C1 + C2)
+            expr = rewrite_if(expr, V1 + C1, V1, lambda: C1.expr.val == 0)
 
-                expr = rewrite(expr, V1 + C1 + C2, V1 + (C1 + C2))
-                expr = rewrite(expr, (C1 - V1) + C2, (C1 + C2) - V1)
-                expr = rewrite(expr, (V1 - C1) + C2, V1 - (C1 - C2))
+            expr = rewrite(expr, V1 + C1 + C2, V1 + (C1 + C2))
+            expr = rewrite(expr, (C1 - V1) + C2, (C1 + C2) - V1)
+            expr = rewrite(expr, (V1 - C1) + C2, V1 - (C1 - C2))
 
-            elif expr.type == Expr.SUB:
-                # const folding
-                expr = rewrite(expr, V1 - V1, ConstExpr(0))
-                expr = rewrite(expr, C1 - C2, C1 - C2)
-                expr = rewrite_if(expr, V1 - C1, V1, lambda: C1.expr.val == 0)
+        elif expr.type == Expr.SUB:
+            # const folding
+            expr = rewrite(expr, V1 - V1, ConstExpr(0))
+            expr = rewrite(expr, C1 - C2, C1 - C2)
+            expr = rewrite_if(expr, V1 - C1, V1, lambda: C1.expr.val == 0)
 
-                expr = rewrite(expr, (V1 + V2) - (V1 + V3), (V2 - V3))
-                expr = rewrite(expr, V1 + (V2 + V3) - V2, V1 + V3)
-                expr = rewrite(expr, (V1 + V2) - V1, V2)
-                expr = rewrite(expr, (V1 + V2) - V2, V1)
-                expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
-                expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
+            expr = rewrite(expr, (V1 + V2) - (V1 + V3), (V2 - V3))
+            expr = rewrite(expr, V1 + (V2 + V3) - V2, V1 + V3)
+            expr = rewrite(expr, (V1 + V2) - V1, V2)
+            expr = rewrite(expr, (V1 + V2) - V2, V1)
+            expr = rewrite(expr, (V1 + C1) - C2, V1 + (C1 - C2))
+            expr = rewrite(expr, (V1 - C1) - C2, V1 + (C1 + C2))
 
-            elif expr.type == Expr.MUL:
-                expr = rewrite(expr, C1 * V1, V1 * C1)
-                expr = rewrite(expr, V1 * C1 * V2, V1 * V2 * C1)
+        elif expr.type == Expr.MUL:
+            expr = rewrite(expr, C1 * V1, V1 * C1)
+            expr = rewrite(expr, V1 * C1 * V2, V1 * V2 * C1)
 
-                # const folding
-                expr = rewrite(expr, C1 * C2, C1 * C2)
-                expr = rewrite_if(expr, V1 * C1, V1, lambda: C1.expr.val == 1)
-                expr = rewrite_if(expr, V1 * C1, ConstExpr(0), lambda: C1.expr.val == 0)
+            # const folding
+            expr = rewrite(expr, C1 * C2, C1 * C2)
+            expr = rewrite_if(expr, V1 * C1, V1, lambda: C1.expr.val == 1)
+            expr = rewrite_if(expr, V1 * C1, ConstExpr(0), lambda: C1.expr.val == 0)
 
-                expr = rewrite(expr, (V1 + V2) * C1, V1 * C1 + V2 * C1)
-                expr = rewrite(expr, (V1 - V2) * C1, V1 * C1 - V2 * C1)
-                expr = rewrite(expr, (V1 * C1) * C2, V1 * (C1 * C2))
+            expr = rewrite(expr, (V1 + V2) * C1, V1 * C1 + V2 * C1)
+            expr = rewrite(expr, (V1 - V2) * C1, V1 * C1 - V2 * C1)
+            expr = rewrite(expr, (V1 * C1) * C2, V1 * (C1 * C2))
+        
+        elif expr.type == Expr.MIN:
+            expr = rewrite(expr, Expr.min(V1, V1), V1)
+            expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, lambda: C1.expr.val > 0)
+            expr = rewrite_if(expr, Expr.min(V1, V1 + C1), V1, lambda: C1.expr.val > 0)
+            expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, lambda: C1.expr.val > 0)
+            expr = rewrite_if(expr, Expr.min(V1, V1 - C1), V1 - C1, lambda: C1.expr.val > 0)
+        
+        elif expr.type == Expr.MAX:
+            expr = rewrite(expr, Expr.max(V1, V1), V1)
+            expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, lambda: C1.expr.val > 0)
+            expr = rewrite_if(expr, Expr.max(V1, V1 + C1), V1 + C1, lambda: C1.expr.val > 0)
+            expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, lambda: C1.expr.val > 0)
+            expr = rewrite_if(expr, Expr.max(V1, V1 - C1), V1, lambda: C1.expr.val > 0)
+        
+        elif expr.is_compare():
+            expr = rewrite(expr, Expr.function_mapping[expr.type](V1 + C1, C2), Expr.function_mapping[expr.type](V1, C2 - C1))
+            expr = rewrite(expr, Expr.function_mapping[expr.type](V1 - C1, C2), Expr.function_mapping[expr.type](V1, C2 + C1))
+            expr = rewrite(expr, Expr.function_mapping[expr.type](V1 * C1, C2), Expr.function_mapping[expr.type](V1, C2 / C1))
+            expr = rewrite(expr, Expr.function_mapping[expr.type](V1 / C1, C2), Expr.function_mapping[expr.type](V1, C2 * C1))
             
-            elif expr.type == Expr.MIN:
-                expr = rewrite(expr, Expr.min(V1, V1), V1)
-                expr = rewrite_if(expr, Expr.min(V1 + C1, V1), V1, lambda: C1.expr.val > 0)
-                expr = rewrite_if(expr, Expr.min(V1, V1 + C1), V1, lambda: C1.expr.val > 0)
-                expr = rewrite_if(expr, Expr.min(V1 - C1, V1), V1 - C1, lambda: C1.expr.val > 0)
-                expr = rewrite_if(expr, Expr.min(V1, V1 - C1), V1 - C1, lambda: C1.expr.val > 0)
-            
-            elif expr.type == Expr.MAX:
-                expr = rewrite(expr, Expr.max(V1, V1), V1)
-                expr = rewrite_if(expr, Expr.max(V1 + C1, V1), V1 + C1, lambda: C1.expr.val > 0)
-                expr = rewrite_if(expr, Expr.max(V1, V1 + C1), V1 + C1, lambda: C1.expr.val > 0)
-                expr = rewrite_if(expr, Expr.max(V1 - C1, V1), V1, lambda: C1.expr.val > 0)
-                expr = rewrite_if(expr, Expr.max(V1, V1 - C1), V1, lambda: C1.expr.val > 0)
-            
-            elif expr.is_compare():
-                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 + C1, C2), Expr.function_mapping[expr.type](V1, C2 - C1))
-                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 - C1, C2), Expr.function_mapping[expr.type](V1, C2 + C1))
-                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 * C1, C2), Expr.function_mapping[expr.type](V1, C2 / C1))
-                expr = rewrite(expr, Expr.function_mapping[expr.type](V1 / C1, C2), Expr.function_mapping[expr.type](V1, C2 * C1))
-            
-            if old_expr.same_as(expr):
-                return expr
-            elif not isinstance(expr, BinaryExpr):
-                return expr.accept(self)
-            else:
-                old_expr = expr
+        if old_expr.same_as(expr):
+            return expr
+        else:
+            return expr.accept(self)
     
     def visit_unary_expr(self, expr):
         V1 = Pattern(Expr)
         old_expr = expr
-        while True:
-            expr.expr = expr.expr.accept(self)
-            if expr.type == Expr.NEG:
-                expr = rewrite(expr, -(-V1), V1)
-            
-            if old_expr.same_as(expr):
-                return expr
-            elif not isinstance(expr, UnaryExpr):
-                return expr.accept(self)
-            else:
-                old_expr = expr
+        
+        expr.expr = expr.expr.accept(self)
+        if expr.type == Expr.NEG:
+            expr = rewrite(expr, -(-V1), V1)
+        
+        if old_expr.same_as(expr):
+            return expr
+        else:
+            return expr.accept(self)
 
 expr_simplifier = ExprSimplifier()
         
