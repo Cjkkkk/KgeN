@@ -50,8 +50,16 @@ class BoundEvaluator(Visitor):
                 Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
                 type=Interval.CLOSED_CLOSED)
         
-        elif expr.type == Expr.FLOOR_DIV or expr.type == Expr.CEIL_DIV: # TODO: fix this
-            interval = Interval(left.start // right.start, left.end // right.end, type=Interval.CLOSED_CLOSED)
+        elif expr.type == Expr.FLOOR_DIV: # TODO: fix this
+            ll = left.start // right.start
+            lu = left.start // right.end
+            ul = left.end // right.start
+            uu = left.end // right.end
+            # start and end could be negative
+            interval = Interval(
+                Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
+                Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
+                type=Interval.CLOSED_CLOSED)
         
         elif expr.type == Expr.MOD:
             interval = Interval(left.start % right.start, left.end % right.end, type=Interval.CLOSED_CLOSED)
