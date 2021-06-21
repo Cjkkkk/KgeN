@@ -166,7 +166,7 @@ def infer_root_iter_bound(tensor, rmap):
         for i, root_axis in enumerate(tensor.root_axis):
             # convert back to closed_open interval if it is not single
             rmap[root_axis] = bounds[i].convert_to_range()
-        
+            rmap[root_axis].end = expr_simplifier.rewrite(rmap[root_axis].end)
         # step 5: recover pass_up side effect
         set_rmap(rmap, affected_axis)
     else:
