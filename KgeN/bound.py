@@ -1,8 +1,8 @@
 from .utils import *
-from .visitor import Visitor, RewriteVisitor
+from .visitor import RewriteVisitor
 from .expr_simplifier import expr_simplifier
 from .tir import Range
-from .interval import Interval, union_interval, intersect_interval
+from .interval import Interval, union_interval, intersect_interval, bound_evaluator
 
 # bound inference
 class RewriteIterVarVisitor(RewriteVisitor):
@@ -19,91 +19,6 @@ class RewriteIterVarVisitor(RewriteVisitor):
             expr = self.map[expr]
             expr = expr_simplifier.rewrite(expr)
         return expr
-
-class BoundEvaluator(Visitor):
-    def __init__(self):
-        super().__init__()
-        self.rmap = None
-        self.relax_set = None
-
-    def evaluate(self, expr, rmap, constraint_map, relax_set):
-        self.rmap = rmap
-        self.constraint_map = constraint_map
-        self.relax_set = relax_set
-        return expr.accept(self)
-    
-    def visit_binary_expr(self, expr):
-        left = expr.left.accept(self)
-        right = expr.right.accept(self)
-        if expr.type == Expr.ADD:
-            interval = Interval(left.start + right.start, left.end + right.end)
-        
-        elif expr.type == Expr.SUB:
-            interval = Interval(left.start - right.end, left.end - right.start)
-        
-        elif expr.type == Expr.MUL:
-            ll = left.start * right.start
-            lu = left.start * right.end
-            ul = left.end * right.start
-            uu = left.end * right.end
-            # start and end could be negative
-            interval = Interval(
-                Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
-                Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
-                )
-        
-        elif expr.type == Expr.FLOOR_DIV: # TODO: fix this
-            ll = left.start // right.start
-            lu = left.start // right.end
-            ul = left.end // right.start
-            uu = left.end // right.end
-            # start and end could be negative
-            interval = Interval(
-                Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
-                Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
-                )
-        
-        elif expr.type == Expr.MIN:
-            interval = Interval(Expr.min(left.start, right.start), Expr.min(left.end, right.end))
-        
-        elif expr.type == Expr.MAX:
-            interval = Interval(Expr.max(left.start, right.start), Expr.max(left.end, right.end))
-        
-        else:
-            raise ValueError("Unsupported op type {}.".format(expr.type))
-        return interval
-
-    def visit_if_then_else_expr(self, expr):
-        then_interval = expr.then_expr.accept(self)
-        else_interval = expr.else_expr.accept(self)
-        interval = union_interval(then_interval, else_interval)
-        return interval
-    
-    def visit_unary_expr(self, expr):
-        if expr.type == Expr.NEG:
-            inner = expr.expr.accept(self)
-            interval = Interval(- inner.end, - inner.start)
-        else:
-            raise ValueError("Unsupported op type {}.".format(expr.type))
-        return interval
-
-    def visit_var_expr(self, expr):
-        return Interval(expr, expr)
-
-    def visit_const_expr(self, expr):
-        return Interval(expr, expr)
-
-    def visit_iter_expr(self, expr):
-        # convert to closed closed interval
-        interval = self.rmap[expr].convert_to_interval()
-        interval.end = expr_simplifier.rewrite(interval.end)
-        if expr in self.constraint_map:
-            interval = intersect_interval(interval, self.constraint_map[expr])
-        if expr in self.relax_set:
-            interval = Interval(interval.start.accept(self).start, interval.end.accept(self).end)
-        return interval
-
-bound_evaluator = BoundEvaluator()
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
     res = [bound.normalize() for bound in bounds]
