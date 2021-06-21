@@ -26,8 +26,8 @@ def split(tensor, ax, factor=-1, nparts=-1):
     new_axis = []
     for axis in tensor.axis:
         if ax is axis:
-            outer = IterVar(axis.name + "_outer", -math.inf, math.inf)
-            inner = IterVar(axis.name + "_inner", -math.inf, math.inf)
+            outer = IterVar(axis.name + "_outer", 0, math.inf)
+            inner = IterVar(axis.name + "_inner", 0, math.inf)
             
             axis.split_outer = outer
             axis.split_inner = inner
@@ -68,7 +68,7 @@ def fuse(tensor, ax1, ax2):
     check_tensor_and_axis(tensor, ax1, ax2)
     new_axis = []
     # set axis to fuse
-    fused = IterVar(ax1.name + "_" + ax2.name + "_fused", -math.inf, math.inf)
+    fused = IterVar(ax1.name + "_" + ax2.name + "_fused", 0, math.inf)
     
     ax1.relation = IterVar.FUSE
     ax2.relation = IterVar.FUSE

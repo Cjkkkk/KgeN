@@ -275,69 +275,27 @@ class ConstExpr(Expr):
     def accept(self, visitor):
         return visitor.visit_const_expr(self)
 
-def union_interval(a, b):
-    return Interval(Expr.min(a.start, b.start), Expr.max(a.end, b.end), type=Interval.CLOSED_CLOSED)
-
-def intersect_interval(a, b):
-    return Interval(Expr.max(a.start, b.start), Expr.min(a.end, b.end), type=Interval.CLOSED_CLOSED)
-
-class Interval:
-    CLOSED_OPEN = 0
-    CLOSED_CLOSED = 1
-    def __init__(self, start, end, stride=1, type=CLOSED_OPEN):
+class Range:
+    def __init__(self, start, end, stride=1):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
         self.stride = wrap_number_as_const_expr(stride)
-        self.type = type
-
+    
     @staticmethod
     def single_point(expr):
-        interval = Interval(expr, expr + 1)
+        interval = Range(expr, expr + 1)
         return interval
 
     @property
-    def is_all(self):
-        return self.start.same_as(ConstExpr(-math.inf)) and self.end.same_as(ConstExpr(math.inf))
-
-    @property
     def is_single_point(self):
-        if self.type == Interval.CLOSED_CLOSED:
-            return self.start.same_as(self.end)
-        else:
-            return (self.start + 1).same_as(self.end)
+        return (self.start + 1).same_as(self.end)
 
+    def convert_to_interval(self):
+        from .interval import Interval
+        return Interval(self.start, self.end - 1, self.stride)
+    
     def __str__(self):
-        return "[{0}, {1}{2}".format(self.start, self.end, "]" if self.type == Interval.CLOSED_CLOSED else ")")
-    
-    def as_closed_open(self):
-        if self.type == Interval.CLOSED_CLOSED:
-            self.type = Interval.CLOSED_OPEN
-            self.end += 1
-    
-    def as_closed_closed(self):
-        if self.type == Interval.CLOSED_OPEN:
-            self.type = Interval.CLOSED_CLOSED
-            self.end -= 1
-
-    def normalize(self):
-        shift = ConstExpr(0)
-        stride = ConstExpr(1)
-        # TODO: fix this
-        # if not self.start.same_as(ConstExpr(0)) and not self.is_single_point:
-        if not self.start.same_as(ConstExpr(0)):
-            shift = self.start
-            self.end = self.end - self.start
-            self.start = ConstExpr(0)
-        if not self.stride.same_as(ConstExpr(1)):
-            stride = self.stride
-            self.stride = ConstExpr(1)
-            self.end = self.end // stride
-        return shift, stride
-
-# TODO: implement this
-class IntervalSet:
-    def __init__(self, *intervals):
-        self.intervals = list(intervals)
+        return "[{0}, {1})".format(self.start, self.end)
 
 class IterVar(Expr):
     NORMAL = 0
@@ -349,10 +307,10 @@ class IterVar(Expr):
     VECTORIZED=5
     UNROLL=6
     REDUCE=7
-    def __init__(self, name, start=0, end=0, stride=1, type=Interval.CLOSED_OPEN):
+    def __init__(self, name, start=0, end=0, stride=1):
         super().__init__()
         self.name = name
-        self.range = Interval(start, end, stride, type=type)
+        self.range = Range(start, end, stride)
         self.attached_computation = []
         self.relation = IterVar.NORMAL
         self.type = IterVar.DEFAULT

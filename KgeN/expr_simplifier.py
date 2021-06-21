@@ -10,13 +10,12 @@ class Pattern(Expr):
     def match(self, other):
         if self.is_matched:
             return self.expr.same_as(other)
-        else:      
-            if isinstance(other, self.cls):      
-                self.is_matched = True
-                self.expr = other
-                return True
-            else:
-                return False
+        elif isinstance(other, self.cls):      
+            self.is_matched = True
+            self.expr = other
+            return True
+        else:
+            return False
 
     def reset(self):
         self.is_matched = False

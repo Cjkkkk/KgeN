@@ -1,7 +1,8 @@
 from .utils import *
 from .visitor import Visitor, RewriteVisitor
 from .expr_simplifier import expr_simplifier
-from .tir import Interval, union_interval
+from .tir import Range
+from .interval import Interval, union_interval, intersect_interval
 
 # bound inference
 class RewriteIterVarVisitor(RewriteVisitor):
@@ -25,8 +26,9 @@ class BoundEvaluator(Visitor):
         self.rmap = None
         self.relax_set = None
 
-    def evaluate(self, expr, rmap, relax_set):
+    def evaluate(self, expr, rmap, constraint_map, relax_set):
         self.rmap = rmap
+        self.constraint_map = constraint_map
         self.relax_set = relax_set
         return expr.accept(self)
     
@@ -34,10 +36,10 @@ class BoundEvaluator(Visitor):
         left = expr.left.accept(self)
         right = expr.right.accept(self)
         if expr.type == Expr.ADD:
-            interval = Interval(left.start + right.start, left.end + right.end, type=Interval.CLOSED_CLOSED)
+            interval = Interval(left.start + right.start, left.end + right.end)
         
         elif expr.type == Expr.SUB:
-            interval = Interval(left.start - right.end, left.end - right.start, type=Interval.CLOSED_CLOSED)
+            interval = Interval(left.start - right.end, left.end - right.start)
         
         elif expr.type == Expr.MUL:
             ll = left.start * right.start
@@ -48,7 +50,7 @@ class BoundEvaluator(Visitor):
             interval = Interval(
                 Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
                 Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
-                type=Interval.CLOSED_CLOSED)
+                )
         
         elif expr.type == Expr.FLOOR_DIV: # TODO: fix this
             ll = left.start // right.start
@@ -59,16 +61,13 @@ class BoundEvaluator(Visitor):
             interval = Interval(
                 Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
                 Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
-                type=Interval.CLOSED_CLOSED)
-        
-        elif expr.type == Expr.MOD:
-            interval = Interval(left.start % right.start, left.end % right.end, type=Interval.CLOSED_CLOSED)
+                )
         
         elif expr.type == Expr.MIN:
-            interval = Interval(Expr.min(left.start, right.start), Expr.min(left.end, right.end), type=Interval.CLOSED_CLOSED)
+            interval = Interval(Expr.min(left.start, right.start), Expr.min(left.end, right.end))
         
         elif expr.type == Expr.MAX:
-            interval = Interval(Expr.max(left.start, right.start), Expr.max(left.end, right.end), type=Interval.CLOSED_CLOSED)
+            interval = Interval(Expr.max(left.start, right.start), Expr.max(left.end, right.end))
         
         else:
             raise ValueError("Unsupported op type {}.".format(expr.type))
@@ -83,22 +82,25 @@ class BoundEvaluator(Visitor):
     def visit_unary_expr(self, expr):
         if expr.type == Expr.NEG:
             inner = expr.expr.accept(self)
-            interval = Interval(- inner.end, - inner.start, type=Interval.CLOSED_CLOSED)
+            interval = Interval(- inner.end, - inner.start)
         else:
             raise ValueError("Unsupported op type {}.".format(expr.type))
         return interval
 
     def visit_var_expr(self, expr):
-        return Interval(expr, expr, type=Interval.CLOSED_CLOSED)
+        return Interval(expr, expr)
 
     def visit_const_expr(self, expr):
-        return Interval(expr, expr, type=Interval.CLOSED_CLOSED)
+        return Interval(expr, expr)
 
     def visit_iter_expr(self, expr):
         # convert to closed closed interval
-        interval = Interval(self.rmap[expr].start, expr_simplifier.rewrite(self.rmap[expr].end - 1), type=Interval.CLOSED_CLOSED)
+        interval = self.rmap[expr].convert_to_interval()
+        interval.end = expr_simplifier.rewrite(interval.end)
+        if expr in self.constraint_map:
+            interval = intersect_interval(interval, self.constraint_map[expr])
         if expr in self.relax_set:
-            interval = Interval(interval.start.accept(self).start, interval.end.accept(self).end, type=Interval.CLOSED_CLOSED)
+            interval = Interval(interval.start.accept(self).start, interval.end.accept(self).end)
         return interval
 
 bound_evaluator = BoundEvaluator()
@@ -125,19 +127,20 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     return bounds
 
 def infer_root_iter_bound(tensor, rmap):
-    if len(tensor.outputs) > 0:
-        bounds = None
+    if not tensor.is_output():
+        # nothing union a = a
+        bounds = [Interval.nothing() for _ in tensor.root_axis] 
+        affected_axis = []
         # step 1: do pass up for compute_at
-        if len(tensor.attach_path) > 0: # not necessary but just for clearity
-            for axis in tensor.attach_path:
-                # Do not treat certain axis as single point axis
-                # TODO: should this be necessary?
-                if tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
-                    continue
-                if tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
-                    continue
-                rmap[axis] = Interval.single_point(axis)
-            pass_up(rmap, axis_topo_sort_bottom_up(tensor.attach_path))
+        for axis in tensor.attach_path:
+            # Do not treat certain axis as single point axis
+            if tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+                continue
+            elif tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+                continue
+            rmap[axis] = Range.single_point(axis)
+        affected_axis += axis_topo_sort_bottom_up(tensor.attach_path)
+        pass_up(rmap, affected_axis)
 
         # step 2: calculate bound of producer
         for output in tensor.outputs:
@@ -149,55 +152,38 @@ def infer_root_iter_bound(tensor, rmap):
                     for axis in output.root_axis:
                         relax_set.add(axis)
 
+                constraint_map = {}
                 if hasattr(provider, "constraint"):
-                    for axis in output.root_axis:
-                        if axis in provider.constraint:
-                            rmap[axis] = intersect_interval(provider.constraint[axis], rmap[axis])
+                    constraint_map = provider.constraint
                         
-                new_bounds = [bound_evaluator.evaluate(index, rmap, relax_set) for index in provider.index]
-                
-                if hasattr(provider, "constraint"):
-                    for axis in output.root_axis:
-                        if axis in provider.constraint:
-                            # recover change
-                            rmap[axis] = axis.range
-                
-                if bounds is None:
-                    bounds = new_bounds
-                else:
-                    for i, new_bound in enumerate(new_bounds):
-                        bounds[i] = union_interval(bounds[i], new_bound)
+                new_bounds = [bound_evaluator.evaluate(index, rmap, constraint_map, relax_set) for index in provider.index]
+                for i, new_bound in enumerate(new_bounds):
+                    bounds[i] = union_interval(bounds[i], new_bound)
 
         # step 3: normalize bounds
         bounds = normalize_bound_and_rewrite_expr(tensor, bounds)
         # step 4: set range of root axis so later it can be propagated to leaf
         for i, root_axis in enumerate(tensor.root_axis):
             # convert back to closed_open interval if it is not single
-            bounds[i].as_closed_open()
-            rmap[root_axis] = bounds[i]
-            root_axis.range = rmap[root_axis]
+            rmap[root_axis] = bounds[i].convert_to_range()
         
         # step 5: recover pass_up side effect
-        if len(tensor.attach_path) > 0:
-            affected_axis = axis_topo_sort_bottom_up(tensor.attach_path)
-            for axis in affected_axis:
-                rmap[axis] = axis.range
+        set_rmap(rmap, affected_axis)
     else:
         # is output tensor, therefore no providers
-        for root_axis in tensor.root_axis:
-            rmap[root_axis] = root_axis.range
+        pass
 
 def pass_down(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.relation == IterVar.SPLIT:
             if axis.factor != -1:
-                rmap[axis.split_outer] = Interval(0, Expr.ceildiv(rmap[axis].end, axis.factor))
-                rmap[axis.split_inner] = Interval(0, Expr.min(rmap[axis].end, axis.factor))
+                rmap[axis.split_outer] = Range(0, Expr.ceildiv(rmap[axis].end, axis.factor))
+                rmap[axis.split_inner] = Range(0, Expr.min(rmap[axis].end, axis.factor))
             else:
-                rmap[axis.split_outer] = Interval(0, Expr.min(rmap[axis].end, axis.nparts))
-                rmap[axis.split_inner] = Interval(0, Expr.ceildiv(rmap[axis].end, axis.nparts))
+                rmap[axis.split_outer] = Range(0, Expr.min(rmap[axis].end, axis.nparts))
+                rmap[axis.split_inner] = Range(0, Expr.ceildiv(rmap[axis].end, axis.nparts))
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
-            rmap[axis.fused] = Interval(0, rmap[axis.fused.fused_outer].end * rmap[axis.fused.fused_inner].end)
+            rmap[axis.fused] = Range(0, rmap[axis.fused.fused_outer].end * rmap[axis.fused.fused_inner].end)
         else:
             # we already know root_axis's range
             pass
@@ -207,17 +193,17 @@ def pass_up(rmap, axis_tuple):
     for axis in axis_tuple:
         if axis.relation == IterVar.SPLIT:
             if rmap[axis.split_outer].is_single_point and rmap[axis.split_inner].is_single_point:
-                rmap[axis] = Interval.single_point(axis)
+                rmap[axis] = Range.single_point(axis)
             else:
-                rmap[axis] = bound_evaluator.evaluate(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {})
-                rmap[axis].as_closed_open()
+                interval = bound_evaluator.evaluate(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {}, {})
+                rmap[axis] = interval.convert_to_range()
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis.fused].is_single_point:
-                rmap[axis.fused.fused_outer] = Interval.single_point(axis.fused.fused_outer)
-                rmap[axis.fused.fused_inner] = Interval.single_point(axis.fused.fused_inner)
+                rmap[axis.fused.fused_outer] = Range.single_point(axis.fused.fused_outer)
+                rmap[axis.fused.fused_inner] = Range.single_point(axis.fused.fused_inner)
             else:
-                rmap[axis.fused.fused_outer] = Interval(Expr.ceildiv(rmap[axis.fused].start, axis.fused.fused_inner.range.end), Expr.ceildiv(rmap[axis.fused].end, axis.fused.fused_inner.range.end))
-                rmap[axis.fused.fused_inner] = Interval(0, axis.fused.fused_inner.range.end)
+                rmap[axis.fused.fused_outer] = Range(Expr.ceildiv(rmap[axis.fused].start, axis.fused.fused_inner.range.end), Expr.ceildiv(rmap[axis.fused].end, axis.fused.fused_inner.range.end))
+                rmap[axis.fused.fused_inner] = Range(0, axis.fused.fused_inner.range.end)
         else:
             # we already set leaf_axis's range
             pass
@@ -247,6 +233,7 @@ def bind_to_axis(rmap, axis_sort):
         axis.range = rmap[axis]
 
 def infer_bound_pass(tensors):
+    # rmap: {itervar: Range}
     rmap = {}
     for tensor in tensors:
         axis_sort = axis_topo_sort_top_down(tensor.root_axis + tensor.reduce_axis)
@@ -266,7 +253,7 @@ def check_bound_pass(tensors):
             res = isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val
             if res:
                 # can decrease tensor size to save memory
-                new_shape.append(root_axis.range.end + 1 if root_axis.range.type == Interval.CLOSED_CLOSED else root_axis.range.end)
+                new_shape.append(root_axis.range.end)
             else:
                 new_shape.append(tensor.shape[idx])
             is_safe = is_safe and res

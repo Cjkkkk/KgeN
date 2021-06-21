@@ -48,6 +48,7 @@ A TVM-like CUDA code generator.
 - [ ] add interval set
 - [ ] move const folding from tir to expr_simplifier?
 - [ ] add host code
+- [ ] sort expression term before simplification？
 
 # example
 ```
