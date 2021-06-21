@@ -64,11 +64,10 @@ class IR_Printer(CollectVisitor):
     def visit_for_stmt(self, stmt):
         var = stmt.iter_var
         if not var.range.is_single_point and var.bind_to is None:
-            self.emit("for ({0}: {1}, {2}, {3}) {{".format(
+            self.emit("for ({0}: {1}, {2}, 1) {{".format(
                 var.name, 
                 var.range.start.accept(self),
-                var.range.end.accept(self),
-                var.range.stride.accept(self)))
+                var.range.end.accept(self)))
             self.enter_scope()
             
         for st in stmt.body:

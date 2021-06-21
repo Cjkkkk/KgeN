@@ -276,10 +276,9 @@ class ConstExpr(Expr):
         return visitor.visit_const_expr(self)
 
 class Range:
-    def __init__(self, start, end, stride=1):
+    def __init__(self, start, end):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
-        self.stride = wrap_number_as_const_expr(stride)
     
     @staticmethod
     def single_point(expr):
@@ -292,7 +291,7 @@ class Range:
 
     def convert_to_interval(self):
         from .interval import Interval
-        return Interval(self.start, self.end - 1, self.stride)
+        return Interval(self.start, self.end - 1)
     
     def __str__(self):
         return "[{0}, {1})".format(self.start, self.end)
@@ -307,10 +306,10 @@ class IterVar(Expr):
     VECTORIZED=5
     UNROLL=6
     REDUCE=7
-    def __init__(self, name, start=0, end=0, stride=1):
+    def __init__(self, name, start=0, end=0):
         super().__init__()
         self.name = name
-        self.range = Range(start, end, stride)
+        self.range = Range(start, end)
         self.attached_computation = []
         self.relation = IterVar.NORMAL
         self.type = IterVar.DEFAULT

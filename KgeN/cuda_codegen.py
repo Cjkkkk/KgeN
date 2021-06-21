@@ -66,11 +66,10 @@ class CUDA_code_generator(IR_Printer):
         if not var.range.is_single_point and var.bind_to is None:
             if var.type == IterVar.UNROLL:
                 self.emit("#pragma unroll")
-            self.emit("for (int {0} = {1}; {0} < {2} ; {0} += {3}) {{".format(
+            self.emit("for (int {0} = {1}; {0} < {2} ; {0} += 1) {{".format(
                 var.name, 
                 var.range.start.accept(self),
-                var.range.end.accept(self),
-                var.range.stride.accept(self)))
+                var.range.end.accept(self)))
             self.enter_scope()
             
         for st in stmt.body:

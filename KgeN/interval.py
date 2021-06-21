@@ -34,7 +34,7 @@ class Interval:
         return self.start.same_as(ConstExpr(-math.inf)) and self.end.same_as(ConstExpr(math.inf))
     
     def convert_to_range(self):
-        return Range(self.start, self.end + 1, self.stride)
+        return Range(self.start, self.end + 1)
 
     def normalize(self):
         shift = ConstExpr(0)
