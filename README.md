@@ -51,8 +51,14 @@ A TVM-like CUDA code generator.
 - [ ] sort expression term before simplification？
 
 # example
+## install
 ```
-python3 -m example.matmul_cache_write
+pip3 install -e .
+```
+
+## matmul
+```
+python3 example/matmul_cache_write.py
 ```
 
 ```c
