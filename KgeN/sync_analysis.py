@@ -1,9 +1,9 @@
 from .visitor import Visitor
 
-READ=0
-WRITE=1
 
 class AccessEntry:
+    READ=0
+    WRITE=1
     def __init__(self, type, tensor, nest_loop):
         self.type = type
         self.tensor = tensor
@@ -15,8 +15,8 @@ class SyncAnalysisVisitor(Visitor):
         self.access_list = []
         self.nest_loop = []
         self.m = {
-            READ: {},
-            WRITE: {}
+            AccessEntry.READ: {},
+            AccessEntry.WRITE: {}
         }
     
     def analysis(self, func):
@@ -48,9 +48,9 @@ class SyncAnalysisVisitor(Visitor):
         tensor = stmt.dest.tensor
         for inp in tensor.inputs:
             if inp.scope == "shared":
-                self.access_list.append(AccessEntry(READ, inp, tuple(self.nest_loop)))
+                self.access_list.append(AccessEntry(AccessEntry.READ, inp, tuple(self.nest_loop)))
         if tensor.scope == "shared":
-            self.access_list.append(AccessEntry(WRITE, tensor, tuple(self.nest_loop)))
+            self.access_list.append(AccessEntry(AccessEntry.WRITE, tensor, tuple(self.nest_loop)))
 
 def find_sync_loop(loop_a, loop_b):
     has_same_loop = False

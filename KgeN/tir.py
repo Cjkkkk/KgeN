@@ -23,7 +23,7 @@ class Expr:
     CEIL_DIV = 12
     AND = 13
     OR = 14
-    NOT = 14
+    NOT = 15
     NEG = 16
     
     def __add__(self, other):
@@ -297,10 +297,12 @@ class Range:
         return "[{0}, {1})".format(self.start, self.end)
 
 class IterVar(Expr):
+    # relation
     NORMAL = 0
     SPLIT = 1
     FUSE = 2
 
+    # type
     DEFAULT = 3
     BIND = 4
     VECTORIZED=5
