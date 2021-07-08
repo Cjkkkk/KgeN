@@ -37,7 +37,8 @@ class C_code_generator(IR_Printer):
         var = stmt.iter_var
         if not var.range.is_single_point and var.bind_to is None:
             if var.type == IterVar.UNROLL:
-                self.emit("#pragma unroll")
+                assert isinstance(var.range.end, ConstExpr), "can only unroll loop with const length."
+                self.emit("#pragma GCC unroll {0}".format(var.range.end))
             self.emit("for (int {0} = {1}; {0} < {2} ; {0} += 1) {{".format(
                 var.name, 
                 var.range.start.accept(self),

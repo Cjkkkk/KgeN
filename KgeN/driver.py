@@ -1,13 +1,14 @@
-from .te import placeholder
 from .bound import infer_bound_pass, check_bound_pass
 from .gen_func import gen_func_pass
 from .cuda_codegen import CUDA_codegen_pass
+from .c_codegen import C_codegen_pass
 from .build_graph import build_graph_pass
 from .sync_analysis import sync_analysis_pass
 from .utils import tensor_topo_sort_bottom_up
 from .inline_injection import inline_injection_pass
 from .expand import expand_pass
 from .tir import TensorExpr
+from .target import Target
 
 def lower(bufs):
     inputs = [t for t in bufs if t.type == TensorExpr.PLACEHOLDER]
@@ -28,6 +29,11 @@ def lower(bufs):
     func = expand_pass(func)
     return func
 
-def build(func):
-    func = sync_analysis_pass(func)
-    return CUDA_codegen_pass(func)
+def build(func, target=Target.CUDA):
+    if target == Target.CUDA:
+        func = sync_analysis_pass(func)
+        return CUDA_codegen_pass(func)
+    elif target == Target.C:
+        return C_codegen_pass(func)
+    else:
+        raise ValueError("Unsupported target: {0}".format(target))

@@ -1,5 +1,5 @@
 # KgeN
-A TVM-like CUDA code generator.
+A TVM-like CUDA/C code generator.
 
 # Component
 * Expression IR
