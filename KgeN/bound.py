@@ -21,6 +21,9 @@ class RewriteIterVarVisitor(RewriteVisitor):
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
+    print(tensor.name)
+    for bound in bounds:
+        print(bound)
     res = [bound.normalize() for bound in bounds]
     for bound in bounds:
         bound.end = expr_simplifier.rewrite(bound.end)
@@ -29,7 +32,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.root_axis):
         shift, stride = res[i]
-        root_axis_to_shift[axis] = (axis + shift) * stride
+        root_axis_to_shift[axis] = axis * stride + shift
         root_axis_to_shift[axis] = expr_simplifier.rewrite(root_axis_to_shift[axis])
         
     for output in tensor.outputs:

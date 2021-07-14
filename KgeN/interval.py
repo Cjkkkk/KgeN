@@ -26,6 +26,10 @@ class Interval:
         return interval
     
     @property
+    def is_single_point(self):
+        return self.start.same_as(self.end)
+    
+    @property
     def is_nothing(self):
         return self.start.same_as(ConstExpr(math.inf)) and self.end.same_as(ConstExpr(-math.inf))
     
@@ -52,7 +56,7 @@ class Interval:
         return shift, stride
 
     def __str__(self):
-        return "[{0}, {1}]".format(self.start, self.end)
+        return "[{0}, {1}], stride={2}".format(self.start, self.end, self.stride)
 
 # TODO: implement this
 class IntervalSet:
@@ -85,11 +89,19 @@ class BoundEvaluator(Visitor):
             lu = left.start * right.end
             ul = left.end * right.start
             uu = left.end * right.end
+            
             # start and end could be negative
+            # if left.is_single_point and right.is_single_point:
+            #     interval = Interval(Expr.min(ll, uu), Expr.max(ll, uu))
+            # elif left.is_single_point:
+            #     interval = Interval(Expr.min(ll, uu), Expr.max(ll, uu), stride=left.start)
+            # elif right.is_single_point:
+            #     interval = Interval(Expr.min(ll, uu), Expr.max(ll, uu), stride=right.start)
+            # else:
             interval = Interval(
                 Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
                 Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
-                )
+            )
         
         elif expr.type == Expr.FLOOR_DIV: # TODO: fix this
             ll = left.start // right.start

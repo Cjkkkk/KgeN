@@ -49,6 +49,7 @@ A TVM-like CUDA/C code generator.
 - [ ] move const folding from tir to expr_simplifier?
 - [ ] add host code
 - [ ] sort expression term before simplification？
+- [ ] fix stride.py
 
 # example
 ## install

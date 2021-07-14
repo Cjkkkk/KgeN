@@ -282,8 +282,8 @@ class Range:
     
     @staticmethod
     def single_point(expr):
-        interval = Range(expr, expr + 1)
-        return interval
+        range = Range(expr, expr + 1)
+        return range
 
     @property
     def is_single_point(self):
