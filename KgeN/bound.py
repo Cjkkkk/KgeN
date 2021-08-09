@@ -44,28 +44,28 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
         tensor.expr = visitor.rewrite(tensor.expr)
     return bounds
 
-def infer_root_iter_bound(tensor, rmap):
-    if not tensor.is_output():
+def infer_root_iter_bound(stage, rmap):
+    if not stage.tensor.is_output():
         # nothing union a = a
-        bounds = [Interval.nothing() for _ in tensor.root_axis] 
+        bounds = [Interval.nothing() for _ in stage.tensor.axis] 
         affected_axis = []
         # step 1: do pass up for compute_at
-        for axis in tensor.attach_path:
+        for axis in stage.attach_path:
             # Do not treat certain axis as single point axis
-            if tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+            if stage.tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
                 continue
-            elif tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+            elif stage.tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
                 continue
             rmap[axis] = Range.single_point(axis)
-        affected_axis += axis_topo_sort_bottom_up(tensor.attach_path)
+        affected_axis += axis_topo_sort_bottom_up(stage.attach_path)
         pass_up(rmap, affected_axis)
 
         # step 2: calculate bound of producer
-        for output in tensor.outputs:
-            for provider in output.providers[tensor]:
+        for output in stage.tensor.outputs:
+            for provider in output.providers[stage.tensor]:
                 relax_set = set()
                 # TODO: fix this
-                if tensor.attach_at is not output and len(output.attach_path) > 0:
+                if stage.attach_at is not output and len(output.attach_path) > 0:
                     # tensor is not attached at current provider
                     for axis in output.root_axis:
                         relax_set.add(axis)
@@ -81,10 +81,10 @@ def infer_root_iter_bound(tensor, rmap):
         # step 3: normalize bounds
         bounds = normalize_bound_and_rewrite_expr(tensor, bounds)
         # step 4: set range of root axis so later it can be propagated to leaf
-        for i, root_axis in enumerate(tensor.root_axis):
+        for i, axis in enumerate(tensor.axis):
             # convert back to closed_open interval if it is not single
-            rmap[root_axis] = bounds[i].convert_to_range()
-            rmap[root_axis].end = expr_simplifier.rewrite(rmap[root_axis].end)
+            rmap[axis] = bounds[i].convert_to_range()
+            rmap[axis].end = expr_simplifier.rewrite(rmap[axis].end)
         # step 5: recover pass_up side effect
         set_rmap(rmap, affected_axis)
     else:
@@ -132,41 +132,42 @@ def set_rmap(rmap, axis_sort):
         rmap[axis] = axis.range
 
 
-def create_attach_path(tensor):
-    cur_tensor = tensor
+def create_attach_path(stage):
+    cur_stage = stage
     attach_path = []
-    while cur_tensor.attached:
+    while cur_stage.attached:
         cur_attach_path = []
-        for axis in cur_tensor.attach_at.axis:
+        for axis in cur_stage.attach_at.axis:
             cur_attach_path.append(axis)
-            if axis is cur_tensor.attach_axis:
+            if axis is cur_stage.attach_axis:
                 attach_path += reversed(cur_attach_path)
                 break
-        cur_tensor = cur_tensor.attach_at
-    tensor.attach_path = tuple(attach_path)
+        cur_stage = cur_stage.attach_at
+    stage.attach_path = tuple(attach_path)
 
 
 def bind_to_axis(rmap, axis_sort):
     for axis in axis_sort:
         axis.range = rmap[axis]
 
-def infer_bound_pass(tensors):
+def infer_bound_pass(schdule):
     # rmap: {itervar: Range}
     rmap = {}
-    for tensor in tensors:
-        axis_sort = axis_topo_sort_top_down(tensor.root_axis + tensor.reduce_axis)
+    for stage in schdule.stages:
+        axis_sort = axis_topo_sort_top_down(stage.tensor.axis + stage.tensor.reduce_axis)
         set_rmap(rmap, axis_sort)
-        create_attach_path(tensor)
+        create_attach_path(stage)
         infer_root_iter_bound(tensor, rmap)
         pass_down(rmap, axis_sort)
         bind_to_axis(rmap, axis_sort)
 
 
-def check_bound_pass(tensors):
-    for tensor in tensors:
+def check_bound_pass(schdule):
+    for stage in schdule.stages:
+        tensor = stage.tensor
         is_safe = True
         new_shape = []
-        for idx, root_axis in enumerate(tensor.root_axis):
+        for idx, root_axis in enumerate(tensor.axis):
             # TODO: add boundary test, can prove?
             res = isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val
             if res:

@@ -394,10 +394,6 @@ class TensorExpr(Expr):
         self.dtype = dtype
         self.scope = scope
 
-        # compute at
-        self.attached = False
-        self.attach_at = None
-        self.is_inline = False
         # is_safe == True means that no boundary test is needed
         self.is_safe = True
 
@@ -407,23 +403,18 @@ class TensorExpr(Expr):
         self.providers = {}
 
         # leaf axis
-        self.axis = [IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)]
-        self.root_axis = tuple(self.axis)
+        self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)])
         self.reduce_axis = ()
-        # tensor's attach_path, only used when compute_at
-        # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
-        self.attach_path = ()
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
 
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
-                self.axis = list(self.root_axis + self.expr.reduce_axis)
             
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
-        assert len(index) == len(self.root_axis), "should provide exactly {0} axis, got {1}.".format(len(self.root_axis), len(index))
+        assert len(index) == len(self.axis), "should provide exactly {0} axis, got {1}.".format(len(self.axis), len(index))
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice

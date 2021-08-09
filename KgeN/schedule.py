@@ -1,109 +1,138 @@
 from .te import compute
 from .tir import *
 from .visitor import RewriteVisitor
-from .utils import axis_topo_sort_top_down
+from .build_graph import build_graph
+from .utils import axis_topo_sort_top_down, tensor_topo_sort_bottom_up
 import math
 
 
 # schedule primitives
-def check_tensor_and_axis(tensor, *axis):
-    assert isinstance(tensor, TensorExpr), "Expect TensorExpr not {0}".format(type(tensor))
+def create_schedule(tensor):
+    build_graph(tensor)
+    tensors = tensor_topo_sort_bottom_up(tensor)
+    s = Schedule(tensors)
+    return s
 
-    for ax in axis:
-        assert ax in tensor.axis, "{0} is not {1}'s axis".format(ax.name, tensor.name)
+class Schedule:
+    def __init__(self, tensors):
+        self.stages = []
+        self.stage_map = {}
+        for tensor in tensors:
+            stage = Stage(tensor)
+            self.stages.append(stage)
+            self.stage_map[tensor] = stage
 
-def bind(ax, thread_axis):
-    assert thread_axis.type == IterVar.BIND, "should provide thread_axis."
-    assert ax.bind_to is None, "already bind to another thread axis {}".format(ax.bind_to.name)
-    assert ax.type == IterVar.DEFAULT or ax.type == IterVar.REDUCE, "can not bind axis of {} type".format(ax.type)
-    ax.bind_to = thread_axis
+    def __getitem__(self, tensor):
+        return self.stage_map[tensor]
 
-def split(tensor, ax, factor=-1, nparts=-1):
-    check_tensor_and_axis(tensor, ax)
-    
-    new_axis = []
-    for axis in tensor.axis:
-        if ax is axis:
-            outer = IterVar(axis.name + "_outer", 0, math.inf)
-            inner = IterVar(axis.name + "_inner", 0, math.inf)
-            
-            axis.split_outer = outer
-            axis.split_inner = inner
-            outer.split = axis
-            inner.split = axis
+class Stage:
+    def __init__(self, tensor):
+        self.tensor = tensor
+        # compute at
+        self.attached = False
+        self.attach_at = None
+        self.is_inline = False
+        # tensor's attach_path, only used when compute_at
+        # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
+        self.attach_path = ()
+        self.leaf_axis = list(self.tensor.axis + self.tensor.reduce_axis)
 
-            axis.factor = factor
-            axis.nparts = nparts
-            
-            axis.relation = IterVar.SPLIT
-            new_axis.append(outer)
-            new_axis.append(inner)
-        else:
-            new_axis.append(axis)
-    tensor.axis = new_axis
-    return outer, inner
+    def check_axis(self, *axis):
+        for ax in axis:
+            assert ax in self.leaf_axis, "{0} is not {1}'s axis".format(ax.name, self.tensor.name)
 
-def tile(tensor, ax1, ax2, factor1, factor2):
-    check_tensor_and_axis(tensor, ax1, ax2)
-    ax1_outer, ax1_inner = split(tensor, ax1, factor1)
-    ax2_outer, ax2_inner = split(tensor, ax2, factor2)
-    return ax1_outer, ax1_inner, ax2_outer, ax2_inner
+    def bind(self, ax, thread_axis):
+        assert thread_axis.type == IterVar.BIND, "should provide thread_axis."
+        assert ax.bind_to is None, "already bind to another thread axis {}".format(ax.bind_to.name)
+        assert ax.type == IterVar.DEFAULT or ax.type == IterVar.REDUCE, "can not bind axis of {} type".format(ax.type)
+        ax.bind_to = thread_axis
 
-def reorder(tensor, *axis):
-    check_tensor_and_axis(tensor, *axis)
-    new_axis = []
-    cur = 0
-    axis_set = set(axis)
-    for ax in tensor.axis:
-        if ax in axis_set:
-            new_axis.append(axis[cur])
-            cur += 1
-        else:
-            new_axis.append(ax)
-    tensor.axis = new_axis
+    def split(self, ax, factor=-1, nparts=-1):
+        self.check_axis(ax)
+        
+        new_axis = []
+        for axis in self.leaf_axis:
+            if ax is axis:
+                outer = IterVar(axis.name + "_outer", 0, math.inf)
+                inner = IterVar(axis.name + "_inner", 0, math.inf)
+                
+                axis.split_outer = outer
+                axis.split_inner = inner
+                outer.split = axis
+                inner.split = axis
 
-def fuse(tensor, ax1, ax2):
-    check_tensor_and_axis(tensor, ax1, ax2)
-    new_axis = []
-    # set axis to fuse
-    fused = IterVar(ax1.name + "_" + ax2.name + "_fused", 0, math.inf)
-    
-    ax1.relation = IterVar.FUSE
-    ax2.relation = IterVar.FUSE
-    
-    ax1.fused = fused
-    ax2.fused = fused
+                axis.factor = factor
+                axis.nparts = nparts
+                
+                axis.relation = IterVar.SPLIT
+                new_axis.append(outer)
+                new_axis.append(inner)
+            else:
+                new_axis.append(axis)
+        self.leaf_axis = new_axis
+        return outer, inner
 
-    fused.fused_outer = ax1
-    fused.fused_inner = ax2
+    def tile(self, ax1, ax2, factor1, factor2):
+        self.check_axis(ax1, ax2)
+        ax1_outer, ax1_inner = self.split(ax1, factor1)
+        ax2_outer, ax2_inner = self.split(ax2, factor2)
+        return ax1_outer, ax1_inner, ax2_outer, ax2_inner
 
-    for axis in tensor.axis:
-        if axis is ax1:
-            new_axis.append(fused)
-        elif axis is ax2:
-            continue
-        else:
-            new_axis.append(axis)
-    tensor.axis = new_axis
-    return fused
+    def reorder(self, *axis):
+        self.check_axis(*axis)
+        new_axis = []
+        cur = 0
+        axis_set = set(axis)
+        for ax in self.leaf_axis:
+            if ax in axis_set:
+                new_axis.append(axis[cur])
+                cur += 1
+            else:
+                new_axis.append(ax)
+        self.leaf_axis = new_axis
 
-def vectorize(tensor, axis):
-    check_tensor_and_axis(tensor, axis)
-    axis.type = IterVar.VECTORIZED
+    def fuse(self, ax1, ax2):
+        self.check_axis(ax1, ax2)
+        new_axis = []
+        # set axis to fuse
+        fused = IterVar(ax1.name + "_" + ax2.name + "_fused", 0, math.inf)
+        
+        ax1.relation = IterVar.FUSE
+        ax2.relation = IterVar.FUSE
+        
+        ax1.fused = fused
+        ax2.fused = fused
 
-def unroll(tensor, axis):
-    check_tensor_and_axis(tensor, axis)
-    axis.type = IterVar.UNROLL
+        fused.fused_outer = ax1
+        fused.fused_inner = ax2
 
-def compute_at(tensor, attach_at, axis):
-    check_tensor_and_axis(attach_at, axis)
-    tensor.attached = True
-    tensor.attach_at = attach_at
-    tensor.attach_axis = axis
-    axis.attached_computation.append(tensor)
+        for axis in self.leaf_axis:
+            if axis is ax1:
+                new_axis.append(fused)
+            elif axis is ax2:
+                continue
+            else:
+                new_axis.append(axis)
+        self.leaf_axis = new_axis
+        return fused
 
-def compute_inline(tensor):
-    tensor.is_inline = True
+    def vectorize(self, axis):
+        self.check_axis(axis)
+        axis.type = IterVar.VECTORIZED
+
+    def unroll(self, axis):
+        self.check_axis(axis)
+        axis.type = IterVar.UNROLL
+
+    def compute_at(self, attach_at, axis):
+        attach_at.check_axis(axis)
+        self.attached = True
+        self.attach_at = attach_at
+        self.attach_axis = axis
+        axis.attached_computation.append(self.tensor)
+
+    def compute_inline(self):
+        self.is_inline = True
 
 # rewrite dataflow for cache_read
 class RewriteDataFlowVisitor(RewriteVisitor):
@@ -155,10 +184,10 @@ def cache_write(tensor, scope):
     compiled = local_vars["_"]
 
     tensor.compute_func = compiled
-    tensor.expr = tensor.compute_func(*tensor.root_axis)
+    tensor.expr = tensor.compute_func(*tensor.axis)
 
     all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
-    new_axis = [axis for axis in tensor.axis if axis not in all_reduce_axis]
+    new_axis = tuple([axis for axis in tensor.axis if axis not in all_reduce_axis])
     tensor.reduce_axis = ()
     tensor.axis = new_axis
 

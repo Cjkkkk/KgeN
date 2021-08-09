@@ -20,7 +20,7 @@ class CollectInputVisitor(CollectVisitor):
         for index in expr.index:
             index.accept(self)
 
-def build_graph_pass(tensor):
+def build_graph(tensor):
     visited = {tensor}
     q = [tensor]
 
