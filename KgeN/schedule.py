@@ -1,5 +1,3 @@
-from tvm import te
-from tvm.tir.expr import Reduce
 from .te import compute
 from .tir import *
 from .visitor import RewriteVisitor

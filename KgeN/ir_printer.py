@@ -1,4 +1,3 @@
-from .utils import tensor_topo_sort_bottom_up, axis_topo_sort_top_down
 from .tir import *
 from .visitor import CollectVisitor
 from .te import *

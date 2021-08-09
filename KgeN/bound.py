@@ -2,7 +2,7 @@ from .utils import *
 from .visitor import RewriteVisitor
 from .expr_simplifier import expr_simplifier
 from .tir import Range
-from .interval import Interval, union_interval, intersect_interval, bound_evaluator
+from .interval import Interval, union_interval, bound_evaluator
 
 # bound inference
 class RewriteIterVarVisitor(RewriteVisitor):
