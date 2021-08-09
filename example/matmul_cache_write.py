@@ -58,5 +58,5 @@ s[C].bind(BTx, thread_x)
 s[C].bind(BTy, thread_y)
 
 func = KgeN.lower(s, [A, B, C])
-print(str(func))
+# print(str(func))
 print(KgeN.build(func))

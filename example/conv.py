@@ -37,13 +37,15 @@ B = KgeN.compute(
     name="B",
 )
 
-KgeN.compute_inline(Apad)
 AA = KgeN.cache_read(Apad, "shared", [B])
 WW = KgeN.cache_read(W, "shared", [B])
 AL = KgeN.cache_read(AA, "local", [B])
 WL = KgeN.cache_read(WW, "local", [B])
 BL = KgeN.cache_write(B, "local")
 
+# schedule
+s = KgeN.create_schedule(B)
+s[Apad].compute_inline()
 tile = 8
 num_thread = 8
 block_factor = 64
@@ -57,50 +59,51 @@ thread_x = KgeN.thread_axis(num_thread, "threadIdx.x")
 thread_y = KgeN.thread_axis(num_thread, "threadIdx.y")
 
 hi, wi, fi, ni = B.axis
-bz = KgeN.fuse(B, hi, wi)
-by, fi = KgeN.split(B, fi, factor=block_factor)
-bx, ni = KgeN.split(B, ni, factor=block_factor)
-ty, fi = KgeN.split(B, fi, nparts=num_thread)
-tx, ni = KgeN.split(B, ni, nparts=num_thread)
-KgeN.reorder(B, bz, by, bx, ty, tx, fi, ni)
+bz = s[B].fuse(hi, wi)
+by, fi = s[B].split(fi, factor=block_factor)
+bx, ni = s[B].split(ni, factor=block_factor)
+ty, fi = s[B].split(fi, nparts=num_thread)
+tx, ni = s[B].split(ni, nparts=num_thread)
+s[B].reorder(bz, by, bx, ty, tx, fi, ni)
 
 
 # Bind the iteration variables to GPU thread indices
-KgeN.bind(bz, block_z)
-KgeN.bind(by, block_y)
-KgeN.bind(bx, block_x)
-KgeN.bind(ty, thread_y)
-KgeN.bind(tx, thread_x)
+s[B].bind(bz, block_z)
+s[B].bind(by, block_y)
+s[B].bind(bx, block_x)
+s[B].bind(ty, thread_y)
+s[B].bind(tx, thread_x)
 
 
 # Schedule BL local write
-KgeN.compute_at(BL, B, tx)
-yi, xi, fi, ni, ry, rx, rc = BL.axis
-rco, rci = KgeN.split(BL, rc, factor=step)
-KgeN.reorder(BL, rco, ry, rx, rci, fi, ni)
+s[BL].compute_at(s[B], tx)
+yi, xi, fi, ni = BL.axis
+ry, rx, rc = BL.reduce_axis
+rco, rci = s[BL].split(rc, factor=step)
+s[BL].reorder(rco, ry, rx, rci, fi, ni)
 
 # Attach computation to iteration variables
-KgeN.compute_at(AA, BL, rx)
-KgeN.compute_at(WW, BL, rx)
-KgeN.compute_at(AL, BL, rci)
-KgeN.compute_at(WL, BL, rci)
+s[AA].compute_at(s[BL], rx)
+s[WW].compute_at(s[BL], rx)
+s[AL].compute_at(s[BL], rci)
+s[WL].compute_at(s[BL], rci)
 
 # Schedule for A's shared memory load
 yi, xi, ci, ni = AA.axis
-ty, ci = KgeN.split(AA, ci, nparts=num_thread)
-tx, ni = KgeN.split(AA, ni, nparts=num_thread)
-KgeN.reorder(AA, ty, tx, yi, xi, ci, ni)
-KgeN.bind(ty, thread_y)
-KgeN.bind(tx, thread_x)
+ty, ci = s[AA].split(ci, nparts=num_thread)
+tx, ni = s[AA].split(ni, nparts=num_thread)
+s[AA].reorder(ty, tx, yi, xi, ci, ni)
+s[AA].bind(ty, thread_y)
+s[AA].bind(tx, thread_x)
 
 # Schedule for W's shared memory load
 yi, xi, ci, fi = WW.axis
-ty, ci = KgeN.split(WW, ci, nparts=num_thread)
-tx, fi = KgeN.split(WW, fi, nparts=num_thread)
-KgeN.reorder(WW, ty, tx, yi, xi, ci, fi)
-KgeN.bind(ty, thread_y)
-KgeN.bind(tx, thread_x)
+ty, ci = s[WW].split(ci, nparts=num_thread)
+tx, fi = s[WW].split(fi, nparts=num_thread)
+s[WW].reorder(ty, tx, yi, xi, ci, fi)
+s[WW].bind(ty, thread_y)
+s[WW].bind(tx, thread_x)
 
-func = KgeN.lower([A, W, B])
+func = KgeN.lower(s, [A, W, B])
 print(str(func))
 print(KgeN.build(func))

@@ -27,8 +27,8 @@ class CUDA_code_generator(IR_Printer):
             "threadIdx.y": 1,
             "threadIdx.z": 1
         }
-        output = func_stmt.output_tensors[0]
-        for axis in output.axis:
+        output = func_stmt.schedule[func_stmt.output_tensors[0]]
+        for axis in output.leaf_axis:
             if axis.bind_to is not None:
                 if axis.bind_to.name in block_dim:
                     block_dim[axis.bind_to.name] = axis.range.end.val

@@ -11,7 +11,9 @@ C = KgeN.compute((M, N),
     lambda i, j: KgeN.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
-M, N, K = C.axis
-KgeN.reorder(C, K, N)
-func = KgeN.lower([A, B, C])
+s = KgeN.create_schedule(C)
+M, N = C.axis
+K, = C.reduce_axis
+s[C].reorder(K, N)
+func = KgeN.lower(s, [A, B, C])
 print(KgeN.build(func))

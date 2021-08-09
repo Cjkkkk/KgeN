@@ -1,7 +1,5 @@
 def inline_injection_pass(schdule):
-    tensors = schdule.tensors
-    for tensor in tensors:
-        stage = schdule[tensor]
+    for stage in schdule.stages:
         if stage.is_inline:
-            for output in tensor.outputs:
-                stage.compute_at(output, schdule[output].leaf_axis[-1])
+            for output in stage.outputs:
+                stage.compute_at(output, output.leaf_axis[-1])

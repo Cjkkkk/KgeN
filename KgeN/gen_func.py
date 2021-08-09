@@ -2,8 +2,8 @@ from .tir import ForStmt, FuncStmt, AssignStmt, IterVar, ReduceExpr, TensorSlice
 from .utils import axis_topo_sort_top_down
 from .schedule import Stage
 
-def add_reduce_init(schdule, tensor, fake_axis):
-    stage = schdule[tensor]
+def add_reduce_init(stage, fake_axis):
+    tensor = stage.tensor
     attach_axis = fake_axis
     init_axis = []
 
@@ -24,18 +24,15 @@ def add_reduce_init(schdule, tensor, fake_axis):
         import copy
         init = copy.copy(tensor)
         init_stage = Stage(init)
-        schdule.stage_map[init] = init_stage
         copy_init_axis = copy.deepcopy(init_axis)
-        init_stage.axis = copy_init_axis
+        init_stage.leaf_axis = copy_init_axis
         init.expr = tensor.expr.init
         # avoid unintentional attach
         for axis in copy_init_axis:
             axis.attached_computation = []
         init_stage.compute_at(stage, attach_axis)
 
-def gen_stmt_for_tensor(schdule, tensor, stmt):
-    stage = schdule[tensor]
-
+def gen_stmt_for_stage(stage, stmt):
     def get_fake_axis():
         axis = IterVar("", 0, 1)
         return axis
@@ -43,7 +40,7 @@ def gen_stmt_for_tensor(schdule, tensor, stmt):
     # add fake axis to express compute at root
     stage.leaf_axis = [fake_axis] + stage.leaf_axis
     # check if reduce init is needed
-    add_reduce_init(tensor, fake_axis)
+    add_reduce_init(stage, fake_axis)
     
     # generate for stmt
     for axis in stage.leaf_axis:
@@ -52,9 +49,10 @@ def gen_stmt_for_tensor(schdule, tensor, stmt):
         stmt = new_stmt
 
         for computation in axis.attached_computation:
-            gen_stmt_for_tensor(schdule, computation, stmt)
+            gen_stmt_for_stage(computation, stmt)
     
     # generate assign stmt
+    tensor = stage.tensor
     dest = TensorSliceExpr(tensor, tensor.axis)
     if isinstance(tensor.expr, ReduceExpr):
         source = tensor.expr.combinator(TensorSliceExpr(tensor, tensor.axis), tensor.expr.expr)
@@ -65,12 +63,12 @@ def gen_stmt_for_tensor(schdule, tensor, stmt):
         
 def gen_func_pass(schdule, inputs, outputs):
     func_stmt = FuncStmt()
-    tensors = schdule.tensors
-    func_stmt.storage = tensors
+    func_stmt.schedule = schdule
+    func_stmt.storage = schdule.tensors
     func_stmt.input_tensors = inputs
     func_stmt.output_tensors = outputs
-    for tensor in reversed(tensors):
-        if tensor.type == TensorExpr.PLACEHOLDER or tensor.attached:
+    for stage in reversed(schdule.stages):
+        if stage.tensor.type == TensorExpr.PLACEHOLDER or stage.attached:
             continue
-        gen_stmt_for_tensor(schdule, tensor, func_stmt)
+        gen_stmt_for_stage(stage, func_stmt)
     return func_stmt

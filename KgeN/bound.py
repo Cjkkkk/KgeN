@@ -21,16 +21,13 @@ class RewriteIterVarVisitor(RewriteVisitor):
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
-    print(tensor.name)
-    for bound in bounds:
-        print(bound)
     res = [bound.normalize() for bound in bounds]
     for bound in bounds:
         bound.end = expr_simplifier.rewrite(bound.end)
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     root_axis_to_shift = {}
-    for i, axis in enumerate(tensor.root_axis):
+    for i, axis in enumerate(tensor.axis):
         shift, stride = res[i]
         root_axis_to_shift[axis] = axis * stride + shift
         root_axis_to_shift[axis] = expr_simplifier.rewrite(root_axis_to_shift[axis])
@@ -61,13 +58,13 @@ def infer_root_iter_bound(stage, rmap):
         pass_up(rmap, affected_axis)
 
         # step 2: calculate bound of producer
-        for output in stage.tensor.outputs:
-            for provider in output.providers[stage.tensor]:
+        for output in stage.outputs:
+            for provider in output.tensor.providers[stage.tensor]:
                 relax_set = set()
                 # TODO: fix this
                 if stage.attach_at is not output and len(output.attach_path) > 0:
                     # tensor is not attached at current provider
-                    for axis in output.root_axis:
+                    for axis in output.tensor.axis:
                         relax_set.add(axis)
 
                 constraint_map = {}
@@ -79,9 +76,9 @@ def infer_root_iter_bound(stage, rmap):
                     bounds[i] = union_interval(bounds[i], new_bound)
 
         # step 3: normalize bounds
-        bounds = normalize_bound_and_rewrite_expr(tensor, bounds)
+        bounds = normalize_bound_and_rewrite_expr(stage.tensor, bounds)
         # step 4: set range of root axis so later it can be propagated to leaf
-        for i, axis in enumerate(tensor.axis):
+        for i, axis in enumerate(stage.tensor.axis):
             # convert back to closed_open interval if it is not single
             rmap[axis] = bounds[i].convert_to_range()
             rmap[axis].end = expr_simplifier.rewrite(rmap[axis].end)
@@ -137,7 +134,7 @@ def create_attach_path(stage):
     attach_path = []
     while cur_stage.attached:
         cur_attach_path = []
-        for axis in cur_stage.attach_at.axis:
+        for axis in cur_stage.attach_at.leaf_axis:
             cur_attach_path.append(axis)
             if axis is cur_stage.attach_axis:
                 attach_path += reversed(cur_attach_path)
@@ -157,7 +154,7 @@ def infer_bound_pass(schdule):
         axis_sort = axis_topo_sort_top_down(stage.tensor.axis + stage.tensor.reduce_axis)
         set_rmap(rmap, axis_sort)
         create_attach_path(stage)
-        infer_root_iter_bound(tensor, rmap)
+        infer_root_iter_bound(stage, rmap)
         pass_down(rmap, axis_sort)
         bind_to_axis(rmap, axis_sort)
 

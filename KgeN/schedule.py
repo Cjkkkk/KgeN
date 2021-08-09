@@ -15,12 +15,16 @@ def create_schedule(tensor):
 
 class Schedule:
     def __init__(self, tensors):
+        self.tensors = tensors
         self.stages = []
         self.stage_map = {}
+
         for tensor in tensors:
             stage = Stage(tensor)
             self.stages.append(stage)
             self.stage_map[tensor] = stage
+            for output in tensor.outputs:
+                stage.outputs.append(self.stage_map[output])
 
     def __getitem__(self, tensor):
         return self.stage_map[tensor]
@@ -28,6 +32,7 @@ class Schedule:
 class Stage:
     def __init__(self, tensor):
         self.tensor = tensor
+        self.outputs = []
         # compute at
         self.attached = False
         self.attach_at = None
@@ -129,7 +134,7 @@ class Stage:
         self.attached = True
         self.attach_at = attach_at
         self.attach_axis = axis
-        axis.attached_computation.append(self.tensor)
+        axis.attached_computation.append(self)
 
     def compute_inline(self):
         self.is_inline = True
