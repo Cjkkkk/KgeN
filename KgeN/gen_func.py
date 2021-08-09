@@ -11,13 +11,13 @@ def add_reduce_init(stage, fake_axis):
         # reduce expression
         all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
         first_reduce_idx = 0
-        for idx, axis in enumerate(tensor.axis):
+        for idx, axis in enumerate(stage.leaf_axis):
             if axis in all_reduce_axis:
                 first_reduce_idx = idx
                 break
             else:
                 attach_axis = axis
-        for axis in tensor.axis[first_reduce_idx + 1:]:
+        for axis in stage.leaf_axis[first_reduce_idx + 1:]:
             if axis not in all_reduce_axis:
                 init_axis.append(axis)
         # TODO: fix this, use te.compute
