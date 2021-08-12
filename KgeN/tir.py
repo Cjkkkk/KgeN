@@ -450,7 +450,6 @@ class FuncStmt(Stmt):
         super().__init__()
         self.body = []
         self.schedule = None
-        self.storage = []
         self.input_tensors = []
         self.output_tensors = []
 

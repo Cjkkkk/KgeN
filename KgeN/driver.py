@@ -5,6 +5,7 @@ from .c_codegen import C_codegen_pass
 from .sync_analysis import sync_analysis_pass
 from .inline_injection import inline_injection_pass
 from .expand import expand_pass
+from .vthread_injection import vthread_injection_pass
 from .tir import TensorExpr
 from .target import Target
 
@@ -22,6 +23,7 @@ def lower(schdule, bufs):
     
     func = gen_func_pass(schdule, inputs, outputs)
     func = expand_pass(func)
+    func = vthread_injection_pass(func)
     return func
 
 def build(func, target=Target.CUDA):

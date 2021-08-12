@@ -64,7 +64,6 @@ def gen_stmt_for_stage(stage, stmt):
 def gen_func_pass(schdule, inputs, outputs):
     func_stmt = FuncStmt()
     func_stmt.schedule = schdule
-    func_stmt.storage = schdule.tensors
     func_stmt.input_tensors = inputs
     func_stmt.output_tensors = outputs
     for stage in reversed(schdule.stages):

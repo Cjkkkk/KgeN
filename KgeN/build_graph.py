@@ -33,4 +33,10 @@ def build_graph(tensor):
                 if inp not in visited:
                     visited.add(inp)
                     q.append(inp)
-                inp.outputs.append(tensor)
+    
+    for tensor in visited:
+        tensor.outputs = []
+    
+    for tensor in visited:
+        for inp in tensor.inputs:
+            inp.outputs.append(tensor)

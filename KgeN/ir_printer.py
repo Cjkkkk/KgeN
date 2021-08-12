@@ -31,7 +31,8 @@ class IR_Printer(CollectVisitor):
         self.emit("func kernel({}) {{".format(", ".join([tensor.dtype + "* " + tensor.name for tensor in func_stmt.input_tensors + func_stmt.output_tensors])))
     
     def generate_tensor_shape(self, func_stmt):
-        for tensor in func_stmt.storage:
+        for stage in func_stmt.schedule.stages:
+            tensor = stage.tensor
             self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
     
     def visit_func_stmt(self, stmt):

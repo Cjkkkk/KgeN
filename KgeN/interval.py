@@ -67,6 +67,7 @@ class BoundEvaluator(Visitor):
     def __init__(self):
         super().__init__()
         self.rmap = None
+        self.constraint_map = None
         self.relax_set = None
 
     def evaluate(self, expr, rmap, constraint_map, relax_set):

@@ -55,7 +55,7 @@ def thread_axis(end=None, name=""):
         end, name = None, end
     if end is None:
         end = math.inf
-    assert name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"], "illegal binding name {}".format(name)
+    assert name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"], "illegal binding name {}".format(name)
     axis = IterVar(name, 0, end)
     axis.type = IterVar.BIND
     return axis
