@@ -1,5 +1,4 @@
-from .tir import TensorExpr
-from .visitor import CollectVisitor
+from KgeN.tir.ir import TensorExpr, CollectVisitor
 
 class CollectInputVisitor(CollectVisitor):
     def __init__(self):

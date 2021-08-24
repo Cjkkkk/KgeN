@@ -1,7 +1,6 @@
-from .tir import *
+from .expr import *
 from .visitor import CollectVisitor
-from .te import *
-from .schedule import *
+from KgeN.te import *
 
 # codegen
 class IR_Printer(CollectVisitor):

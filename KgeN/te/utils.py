@@ -1,5 +1,5 @@
-from .tir import *
-from .expr_simplifier import expr_simplifier
+from KgeN.tir.ir import IterVar, ConstExpr
+from KgeN.arith.expr_simplifier import expr_simplifier
 
 def topo_sort(iterable, get_output):
     # Kahn's algorithm

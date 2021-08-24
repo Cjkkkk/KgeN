@@ -1,7 +1,6 @@
-from .te import compute
-from .tir import *
-from .visitor import RewriteVisitor
+from KgeN.tir.ir import *
 from .build_graph import build_graph
+from .operation import compute
 from .utils import axis_topo_sort_top_down, tensor_topo_sort_bottom_up
 import math
 

@@ -1,8 +1,7 @@
-from .utils import *
-from .visitor import RewriteVisitor
-from .expr_simplifier import expr_simplifier
-from .tir import Range
-from .interval import Interval, union_interval, bound_evaluator
+from KgeN.tir.ir import Expr, TensorExpr, Range, RewriteVisitor
+from KgeN.te.utils import *
+from KgeN.arith.expr_simplifier import expr_simplifier
+from KgeN.arith.interval import Interval, union_interval, bound_evaluator
 
 # bound inference
 class RewriteIterVarVisitor(RewriteVisitor):

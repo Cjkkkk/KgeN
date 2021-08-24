@@ -50,6 +50,7 @@ A TVM-like CUDA/C code generator.
 - [ ] add host code
 - [ ] sort expression term before simplification？
 - [ ] fix stride.py
+- [x] directory restructure
 
 # example
 ## install

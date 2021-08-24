@@ -1,5 +1,4 @@
-from .tir import *
-from .visitor import RewriteVisitor
+from KgeN.tir.ir import *
 
 class Pattern(Expr):
     def __init__(self, cls_):

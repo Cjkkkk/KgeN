@@ -1,10 +1,11 @@
 import KgeN
+from KgeN import te
 
 M = 128
 
-A = KgeN.placeholder((M, M), name= "A")
-B = KgeN.compute((M, M), lambda i, j: KgeN.if_then_else(i * j > 64, A[i, j], 0), name="B")
+A = te.placeholder((M, M), name= "A")
+B = te.compute((M, M), lambda i, j: te.if_then_else(i * j > 64, A[i, j], 0), name="B")
 
-s = KgeN.create_schedule(B)
+s = te.create_schedule(B)
 func = KgeN.lower(s, [A, B])
 print(KgeN.build(func))

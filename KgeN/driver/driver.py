@@ -1,13 +1,10 @@
-from .bound import infer_bound_pass, check_bound_pass
-from .gen_func import gen_func_pass
-from .cuda_codegen import CUDA_codegen_pass
-from .c_codegen import C_codegen_pass
-from .sync_analysis import sync_analysis_pass
-from .inline_injection import inline_injection_pass
-from .expand import expand_pass
-from .vthread_injection import vthread_injection_pass
-from .tir import TensorExpr
-from .target import Target
+from KgeN.te.bound import infer_bound_pass, check_bound_pass
+from KgeN.te.gen_func import gen_func_pass
+from KgeN.target.cuda_codegen import CUDA_codegen_pass
+from KgeN.target.c_codegen import C_codegen_pass
+from KgeN.target.target import Target
+from KgeN.tir.transform import sync_analysis_pass, inline_injection_pass, expand_pass, vthread_injection_pass
+from KgeN.tir.ir import TensorExpr
 
 def lower(schdule, bufs):
     inputs = [t for t in bufs if t.type == TensorExpr.PLACEHOLDER]

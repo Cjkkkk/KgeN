@@ -1,6 +1,6 @@
-from .tir import *
-from .constraint import constraint_evaluator
-from .expr_simplifier import expr_simplifier
+from KgeN.tir.ir import *
+from KgeN.arith.constraint import constraint_evaluator
+from KgeN.arith.expr_simplifier import expr_simplifier
 import math
 
 # compute primitives

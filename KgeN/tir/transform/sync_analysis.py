@@ -1,4 +1,4 @@
-from .visitor import Visitor
+from KgeN.tir.ir.visitor import Visitor
 
 
 class AccessEntry:

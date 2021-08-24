@@ -1,6 +1,5 @@
-from .tir import *
-from .visitor import RewriteVisitor
-from .expr_simplifier import expr_simplifier
+from KgeN.tir.ir import IterVar, RewriteVisitor
+from KgeN.arith.expr_simplifier import expr_simplifier
 
 class Expander(RewriteVisitor):  
     def __init__(self):

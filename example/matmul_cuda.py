@@ -1,22 +1,23 @@
 import KgeN
+from KgeN import te
 
 M = 64
 N = 64
 K = 64
 
-A = KgeN.placeholder((M, K), name= "A")
-B = KgeN.placeholder((K, N), name= "B")
-k = KgeN.reduce_axis(K, name="k")
-C = KgeN.compute((M, N), 
-    lambda i, j: KgeN.reduce_sum(A[i, k] * B[k, j], axis=k), 
+A = te.placeholder((M, K), name= "A")
+B = te.placeholder((K, N), name= "B")
+k = te.reduce_axis(K, name="k")
+C = te.compute((M, N), 
+    lambda i, j: te.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
-AA = KgeN.cache_read(A, "shared", [C])
-BB = KgeN.cache_read(B, "shared", [C])
-AAA = KgeN.cache_read(AA, "local", [C])
-BBB = KgeN.cache_read(BB, "local", [C])
+AA = te.cache_read(A, "shared", [C])
+BB = te.cache_read(B, "shared", [C])
+AAA = te.cache_read(AA, "local", [C])
+BBB = te.cache_read(BB, "local", [C])
 
-s = KgeN.create_schedule(C)
+s = te.create_schedule(C)
 M, N = C.axis
 K, = C.reduce_axis
 Mo, Mi = s[C].split(M, 4)
@@ -26,10 +27,10 @@ By, Ty = s[C].split(No, 4)
 Ko, Ki = s[C].split(K, 32)
 s[C].reorder(Bx, By, Tx, Ty, Ko, Ki, Mi, Ni)
 
-block_x = KgeN.thread_axis("blockIdx.x")
-block_y = KgeN.thread_axis("blockIdx.y")
-thread_x = KgeN.thread_axis("threadIdx.x")
-thread_y = KgeN.thread_axis("threadIdx.y")
+block_x = te.thread_axis("blockIdx.x")
+block_y = te.thread_axis("blockIdx.y")
+thread_x = te.thread_axis("threadIdx.x")
+thread_y = te.thread_axis("threadIdx.y")
 
 AM, AK = AA.axis
 BK, BN = BB.axis

@@ -1,8 +1,9 @@
 import KgeN
+from KgeN import te
 
 M = 128
-A = KgeN.compute((M, M), lambda i, j: 1, name="A")
+A = te.compute((M, M), lambda i, j: 1, name="A")
 
-s = KgeN.create_schedule(A)
+s = te.create_schedule(A)
 func = KgeN.lower(s, [A])
 print(KgeN.build(func))

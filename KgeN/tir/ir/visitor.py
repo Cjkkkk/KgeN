@@ -1,5 +1,5 @@
-from .tir import *
-
+from .expr import *
+from .stmt import *
 
 class Visitor:
     def visit_func_stmt(self, stmt):

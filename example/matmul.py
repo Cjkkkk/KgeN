@@ -1,17 +1,18 @@
 import KgeN
+from KgeN import te
 
 M = 128
 N = 128
 K = 128
 
-A = KgeN.placeholder((M, K), name= "A")
-B = KgeN.placeholder((K, N), name= "B")
-k = KgeN.reduce_axis(K, name="k")
-C = KgeN.compute((M, N), 
-    lambda i, j: KgeN.reduce_sum(A[i, k] * B[k, j], axis=k), 
+A = te.placeholder((M, K), name= "A")
+B = te.placeholder((K, N), name= "B")
+k = te.reduce_axis(K, name="k")
+C = te.compute((M, N), 
+    lambda i, j: te.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
-s = KgeN.create_schedule(C)
+s = te.create_schedule(C)
 M, N = C.axis
 K, = C.reduce_axis
 s[C].reorder(K, N)

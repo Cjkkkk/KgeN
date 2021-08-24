@@ -1,8 +1,6 @@
-from .utils import index_flatten
-from .tir import *
-from .ir_printer import IR_Printer
-from .te import *
-from .schedule import *
+from KgeN.te.utils import index_flatten
+from KgeN.tir.ir import *
+from KgeN.te import *
 
 # codegen
 class CUDA_code_generator(IR_Printer):

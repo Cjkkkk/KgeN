@@ -1,5 +1,4 @@
-from .tir import *
-from .visitor import Visitor
+from KgeN.tir.ir import *
 from .expr_simplifier import expr_simplifier
 import math
 

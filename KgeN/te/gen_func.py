@@ -1,6 +1,6 @@
-from .tir import ForStmt, FuncStmt, AssignStmt, IterVar, ReduceExpr, TensorSliceExpr, TensorExpr
-from .utils import axis_topo_sort_top_down
-from .schedule import Stage
+from KgeN.tir.ir import ForStmt, FuncStmt, AssignStmt, IterVar, ReduceExpr, TensorSliceExpr, TensorExpr
+from KgeN.te.utils import axis_topo_sort_top_down
+from KgeN.te import Stage
 
 def add_reduce_init(stage, fake_axis):
     tensor = stage.tensor

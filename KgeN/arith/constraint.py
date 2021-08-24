@@ -1,6 +1,5 @@
-from .visitor import RewriteVisitor
-from .tir import ConstExpr, Expr
-from .interval import Interval, union_interval, intersect_interval
+from KgeN.tir.ir import ConstExpr, Expr, RewriteVisitor
+from KgeN.arith.interval import Interval, union_interval, intersect_interval
 import math
 
 class ConstraintEvaluator(RewriteVisitor):

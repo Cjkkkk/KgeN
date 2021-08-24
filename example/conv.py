@@ -1,5 +1,5 @@
 import KgeN
-
+from KgeN import te
 # https://tvm.apache.org/docs/tutorials/optimize/opt_conv_cuda.html
 
 batch = 256
@@ -11,40 +11,40 @@ pad = 1
 stride = 1
 
 
-A = KgeN.placeholder((in_size, in_size, in_channel, batch), name="A")
-W = KgeN.placeholder((kernel, kernel, in_channel, out_channel), name="W")
+A = te.placeholder((in_size, in_size, in_channel, batch), name="A")
+W = te.placeholder((kernel, kernel, in_channel, out_channel), name="W")
 out_size = (in_size - kernel + 2 * pad) // stride + 1
 # Pad input
-Apad = KgeN.compute(
+Apad = te.compute(
     (in_size + 2 * pad, in_size + 2 * pad, in_channel, batch),
-    lambda yy, xx, cc, nn: KgeN.if_then_else(
-        KgeN.all(yy >= pad, yy - pad < in_size, xx >= pad, xx - pad < in_size),
+    lambda yy, xx, cc, nn: te.if_then_else(
+        te.all(yy >= pad, yy - pad < in_size, xx >= pad, xx - pad < in_size),
         A[yy - pad, xx - pad, cc, nn],
         0,
     ),
     name="Apad",
 )
 # Create reduction variables
-rc = KgeN.reduce_axis(in_channel, name="rc")
-ry = KgeN.reduce_axis(kernel, name="ry")
-rx = KgeN.reduce_axis(kernel, name="rx")
+rc = te.reduce_axis(in_channel, name="rc")
+ry = te.reduce_axis(kernel, name="ry")
+rx = te.reduce_axis(kernel, name="rx")
 # Compute the convolution
-B = KgeN.compute(
+B = te.compute(
     (out_size, out_size, out_channel, batch),
-    lambda yy, xx, ff, nn: KgeN.reduce_sum(
+    lambda yy, xx, ff, nn: te.reduce_sum(
         Apad[yy * stride + ry, xx * stride + rx, rc, nn] * W[ry, rx, rc, ff], axis=(ry, rx, rc)
     ),
     name="B",
 )
 
-AA = KgeN.cache_read(Apad, "shared", [B])
-WW = KgeN.cache_read(W, "shared", [B])
-AL = KgeN.cache_read(AA, "local", [B])
-WL = KgeN.cache_read(WW, "local", [B])
-BL = KgeN.cache_write(B, "local")
+AA = te.cache_read(Apad, "shared", [B])
+WW = te.cache_read(W, "shared", [B])
+AL = te.cache_read(AA, "local", [B])
+WL = te.cache_read(WW, "local", [B])
+BL = te.cache_write(B, "local")
 
 # schedule
-s = KgeN.create_schedule(B)
+s = te.create_schedule(B)
 s[Apad].compute_inline()
 tile = 8
 num_thread = 8
@@ -52,11 +52,11 @@ block_factor = 64
 step = 8
 
 # Get the GPU thread indices
-block_x = KgeN.thread_axis("blockIdx.x")
-block_y = KgeN.thread_axis("blockIdx.y")
-block_z = KgeN.thread_axis("blockIdx.z")
-thread_x = KgeN.thread_axis(num_thread, "threadIdx.x")
-thread_y = KgeN.thread_axis(num_thread, "threadIdx.y")
+block_x = te.thread_axis("blockIdx.x")
+block_y = te.thread_axis("blockIdx.y")
+block_z = te.thread_axis("blockIdx.z")
+thread_x = te.thread_axis(num_thread, "threadIdx.x")
+thread_y = te.thread_axis(num_thread, "threadIdx.y")
 
 hi, wi, fi, ni = B.axis
 bz = s[B].fuse(hi, wi)

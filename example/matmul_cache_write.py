@@ -1,28 +1,29 @@
 import KgeN
+from KgeN import te
 
 M = 64
 N = 64
 K = 64
 
-A = KgeN.placeholder((M, K), name= "A")
-B = KgeN.placeholder((K, N), name= "B")
-k = KgeN.reduce_axis(K, name="k")
-C = KgeN.compute((M, N), 
-    lambda i, j: KgeN.reduce_sum(A[i, k] * B[k, j], axis=k), 
+A = te.placeholder((M, K), name= "A")
+B = te.placeholder((K, N), name= "B")
+k = te.reduce_axis(K, name="k")
+C = te.compute((M, N), 
+    lambda i, j: te.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
 M, N = C.axis
-AA = KgeN.cache_read(A, "shared", [C])
-BB = KgeN.cache_read(B, "shared", [C])
-AAA = KgeN.cache_read(AA, "local", [C])
-BBB = KgeN.cache_read(BB, "local", [C])
-CCC = KgeN.cache_write(C, "local")
+AA = te.cache_read(A, "shared", [C])
+BB = te.cache_read(B, "shared", [C])
+AAA = te.cache_read(AA, "local", [C])
+BBB = te.cache_read(BB, "local", [C])
+CCC = te.cache_write(C, "local")
 
-s = KgeN.create_schedule(C)
-block_x = KgeN.thread_axis("blockIdx.x")
-block_y = KgeN.thread_axis("blockIdx.y")
-thread_x = KgeN.thread_axis("threadIdx.x")
-thread_y = KgeN.thread_axis("threadIdx.y")
+s = te.create_schedule(C)
+block_x = te.thread_axis("blockIdx.x")
+block_y = te.thread_axis("blockIdx.y")
+thread_x = te.thread_axis("threadIdx.x")
+thread_y = te.thread_axis("threadIdx.y")
 
 Mo, Mi = s[C].split(M, 4)
 No, Ni = s[C].split(N, 4)

@@ -1,11 +1,12 @@
 import KgeN
+from KgeN import te
 
 m = 256
-A = KgeN.placeholder((m, m), name = "A")
-B = KgeN.compute((m, m), lambda i, j: 2 + A[i, j], name = "B")
-C = KgeN.compute((m, m), lambda i, j: B[i + j, j] * 2, name = "C")
+A = te.placeholder((m, m), name = "A")
+B = te.compute((m, m), lambda i, j: 2 + A[i, j], name = "B")
+C = te.compute((m, m), lambda i, j: B[i + j, j] * 2, name = "C")
 # schedule
-s = KgeN.create_schedule(C)
+s = te.create_schedule(C)
 outer, inner = s[C].split(C.axis[0], 32)
 B_outer, B_inner = s[B].split(B.axis[0], 32)
 # s[C].reorder(inner, outer)
