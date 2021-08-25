@@ -2,6 +2,7 @@ from KgeN.tir.ir import Expr, TensorExpr, Range, RewriteVisitor
 from KgeN.te.utils import *
 from KgeN.arith.expr_simplifier import expr_simplifier
 from KgeN.arith.interval import Interval, union_interval, bound_evaluator
+import math
 
 # bound inference
 class RewriteIterVarVisitor(RewriteVisitor):
@@ -155,7 +156,15 @@ def infer_bound_pass(schdule):
         create_attach_path(stage)
         infer_root_iter_bound(stage, rmap)
         pass_down(rmap, axis_sort)
+        # set axis's range from rmap
         bind_to_axis(rmap, axis_sort)
+        # check if axis's range equals to the thread axis's range that it binds to
+        check_thread_axis_bound(axis_sort)
+
+def check_thread_axis_bound(axis_sort):
+    for axis in axis_sort:
+        if axis.bind_to is not None and isinstance(axis.range.end, ConstExpr) and isinstance(axis.bind_to.range.end, ConstExpr) and not axis.bind_to.range.end.same_as(ConstExpr(math.inf)):
+            assert axis.range.end.same_as(axis.bind_to.range.end), "range of axis {0} should equal to range of thread axis {1}, got {2} and {3} respectively.".format(axis.name, axis.bind_to.name, axis.range, axis.bind_to.range)
 
 
 def check_bound_pass(schdule):

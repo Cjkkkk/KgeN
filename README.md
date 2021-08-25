@@ -16,7 +16,7 @@ A TVM-like CUDA/C code generator.
 - [x] fix pass up and pass down
 - [x] bound normalization and cosumer index change
 - [x] fix eval_expr_bound with opening and closing corner case
-- [ ] add expr comparison for min max expr
+- [x] add expr comparison for min max expr
 - [x] add codegen for reduce and if_then_else expr
 - [ ] add boundary test to avoid out of index
 - [x] add symbolic expression simplify
@@ -28,7 +28,7 @@ A TVM-like CUDA/C code generator.
 - [x] transform into stmts
 - [x] tensor index flatten 
 - [x] cache read dataflow rewrite
-- [ ] cache read virtual thread and reduce axis
+- [ ] virtual thread and reduce axis
 - [x] cache write
 - [x] move collect input as build graph pass
 - [ ] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
@@ -51,6 +51,7 @@ A TVM-like CUDA/C code generator.
 - [ ] sort expression term before simplification？
 - [ ] fix stride.py
 - [x] directory restructure
+- [ ] rebase
 
 # example
 ## install
