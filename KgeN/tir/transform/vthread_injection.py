@@ -35,6 +35,7 @@ class VThreadInjectionVisitor(RewriteVisitor):
 
     def visit_assign_stmt(self, stmt):
         detector = VthreadDetector(self.vthread_set)
+        # see if stmt contains vthread iter, if true, add for loop to the stmt
         if len(detector.detect(stmt)) > 0:
             for iter in detector.result:
                 new_iter = IterVar(iter.bind_to.name, iter.range.end, IterVar.DEFAULT)

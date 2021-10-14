@@ -11,7 +11,8 @@ class Expander(RewriteVisitor):
 
     def visit_iter_expr(self, expr):
         if expr.range.is_single_point:
-            return expr.range.start
+            # Important: must expand single point itervar with range [split, split] as well 
+            return expr.range.start.accept(self)
         elif expr.relation == IterVar.SPLIT:
             # TODO: check this
             return expr.split_outer.accept(self) * expr.split_inner.range.end.accept(self) + expr.split_inner.accept(self)
