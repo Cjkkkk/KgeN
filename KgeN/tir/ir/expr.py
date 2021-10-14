@@ -308,13 +308,14 @@ class IterVar(Expr):
     VECTORIZED=5
     UNROLL=6
     REDUCE=7
-    def __init__(self, name, start=0, end=0):
+    def __init__(self, name, end, type, thread_tag=""):
         super().__init__()
         self.name = name
-        self.range = Range(start, end)
+        self.range = Range(0, end)
+        self.thread_tag = thread_tag
         self.attached_computation = []
         self.relation = IterVar.NORMAL
-        self.type = IterVar.DEFAULT
+        self.type = type
         self.bind_to = None
 
     def same_as(self, other):
@@ -403,7 +404,7 @@ class TensorExpr(Expr):
         self.providers = {}
 
         # leaf axis
-        self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), 0, v) for i, v in enumerate(self.shape)])
+        self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), v, IterVar.DEFAULT) for i, v in enumerate(self.shape)])
         self.reduce_axis = ()
         if tensor_type == TensorExpr.COMPUTE:
             self.expr = wrap_number_as_const_expr(compute_func(*self.axis))

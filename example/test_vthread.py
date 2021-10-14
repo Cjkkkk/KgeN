@@ -22,7 +22,7 @@ C = te.compute((M, ), lambda i: B[i], name="C")
 s = te.create_schedule(C)
 x, = C.axis
 xo, xi = s[C].split(x, factor=4)
-s[C].bind(xo, te.thread_axis("vthread"))
+s[C].bind(xo, te.thread_axis("vthread", name="vx"))
 s[B].compute_at(s[C], xi)
 tir = str(KgeN.lower(s, [A, B]))
 print(tir)

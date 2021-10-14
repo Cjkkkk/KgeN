@@ -34,7 +34,7 @@ def add_reduce_init(stage, fake_axis):
 
 def gen_stmt_for_stage(stage, stmt):
     def get_fake_axis():
-        axis = IterVar("", 0, 1)
+        axis = IterVar("", 1, IterVar.DEFAULT)
         return axis
     fake_axis = get_fake_axis()
     # add fake axis to express compute at root

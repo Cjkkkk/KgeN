@@ -46,16 +46,15 @@ def reduce_min(expr, axis):
     return ReduceExpr(combinator, math.inf, expr, axis)
 
 def reduce_axis(end, name):
-    axis = IterVar(name, 0, end)
-    axis.type = IterVar.REDUCE
+    axis = IterVar(name, end, IterVar.REDUCE)
     return axis
 
-def thread_axis(end=None, name=""):
-    if isinstance(end, str) and name == "":
-        end, name = None, end
-    if end is None:
-        end = math.inf
-    assert name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"], "illegal binding name {}".format(name)
-    axis = IterVar(name, 0, end)
-    axis.type = IterVar.BIND
+def thread_axis(end=None, tag="", name=""):
+    if isinstance(end, str) and tag == "":
+        end, tag = math.inf, end
+    assert tag in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"], "illegal binding name {}".format(tag)
+    
+    if not name:
+        name = tag
+    axis = IterVar(name, end, IterVar.BIND, tag)
     return axis

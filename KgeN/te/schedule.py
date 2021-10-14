@@ -57,8 +57,8 @@ class Stage:
         new_axis = []
         for axis in self.leaf_axis:
             if ax is axis:
-                outer = IterVar(axis.name + "_outer", 0, math.inf)
-                inner = IterVar(axis.name + "_inner", 0, math.inf)
+                outer = IterVar(axis.name + "_outer", math.inf, IterVar.DEFAULT)
+                inner = IterVar(axis.name + "_inner", math.inf, IterVar.DEFAULT)
                 
                 axis.split_outer = outer
                 axis.split_inner = inner
@@ -99,7 +99,7 @@ class Stage:
         self.check_axis(ax1, ax2)
         new_axis = []
         # set axis to fuse
-        fused = IterVar(ax1.name + "_" + ax2.name + "_fused", 0, math.inf)
+        fused = IterVar(ax1.name + "_" + ax2.name + "_fused", math.inf, IterVar.DEFAULT)
         
         ax1.relation = IterVar.FUSE
         ax2.relation = IterVar.FUSE

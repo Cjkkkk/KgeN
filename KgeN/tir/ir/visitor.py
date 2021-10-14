@@ -124,7 +124,7 @@ class CollectVisitor(Visitor):
     
     def visit_assign_stmt(self, stmt):
         stmt.dest.accept(self)
-        stmt.src.accept(self)
+        stmt.source.accept(self)
 
     def visit_for_stmt(self, stmt):
         for st in stmt.body:
