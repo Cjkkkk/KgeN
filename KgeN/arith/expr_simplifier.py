@@ -148,10 +148,10 @@ class ExprSimplifier(RewriteVisitor):
 
         elif expr.type == Expr.SUB:
             # const folding
-            expr = rewrite(expr, V1 - V1, ConstExpr(0))
             expr = rewrite(expr, C1 - C2, C1 - C2)
             expr = rewrite_if(expr, V1 - C1, V1, lambda: C1.expr.val == 0)
-
+            
+            expr = rewrite(expr, V1 - V1, ConstExpr(0))
             expr = rewrite(expr, (V1 + V2) - (V1 + V3), (V2 - V3))
             expr = rewrite(expr, V1 + (V2 + V3) - V2, V1 + V3)
             expr = rewrite(expr, (V1 + V2) - V1, V2)

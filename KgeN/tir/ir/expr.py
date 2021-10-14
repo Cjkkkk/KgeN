@@ -26,6 +26,8 @@ class Expr:
     NOT = 15
     NEG = 16
     
+    # Only do const folding in the operator
+    # Other simplification should be done in expr_simplifier 
     def __add__(self, other):
         # TODO: add expr simpifier here
         other = wrap_number_as_const_expr(other)
@@ -44,9 +46,9 @@ class Expr:
 
     def __sub__(self, other):
         other = wrap_number_as_const_expr(other)
-        if self.same_as(other):
-            return ConstExpr(0)
-        elif isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
+        # if self.same_as(other):
+        #     return ConstExpr(0)
+        if isinstance(self, ConstExpr) and isinstance(other, ConstExpr):
             return ConstExpr(self.val - other.val)
         elif isinstance(other, ConstExpr) and other.val == 0:
             return self
