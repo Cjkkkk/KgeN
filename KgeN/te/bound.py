@@ -17,24 +17,25 @@ class RewriteIterVarVisitor(RewriteVisitor):
     def visit_iter_expr(self, expr):
         if expr in self.map:
             expr = self.map[expr]
-            expr = expr_simplifier.rewrite(expr)
+            # expr = expr_simplifier.rewrite(expr)
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
-    res = [bound.normalize() for bound in bounds]
-    for bound in bounds:
-        bound.end = expr_simplifier.rewrite(bound.end)
+    shift = [bound.normalize() for bound in bounds]
+    # for bound in bounds:
+    #     bound.end = expr_simplifier.rewrite(bound.end)
+    
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
+    
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.axis):
-        shift, stride = res[i]
-        root_axis_to_shift[axis] = axis * stride + shift
-        root_axis_to_shift[axis] = expr_simplifier.rewrite(root_axis_to_shift[axis])
+        root_axis_to_shift[axis] = axis + shift[i]
+        # root_axis_to_shift[axis] = expr_simplifier.rewrite(root_axis_to_shift[axis])
         
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
-            provider.index = tuple([expr_simplifier.rewrite((idx - res[i][0]) // res[i][1]) for i, idx in enumerate(provider.index)])
+            provider.index = tuple([idx - shift[i] for i, idx in enumerate(provider.index)])
     
     if tensor.type != TensorExpr.PLACEHOLDER:
         visitor = RewriteIterVarVisitor(root_axis_to_shift)

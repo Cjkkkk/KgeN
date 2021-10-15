@@ -9,10 +9,9 @@ def intersect_interval(a, b):
     return Interval(Expr.max(a.start, b.start), Expr.min(a.end, b.end))
 
 class Interval:
-    def __init__(self, start, end, stride=1):
+    def __init__(self, start, end):
         self.start = wrap_number_as_const_expr(start)
         self.end = wrap_number_as_const_expr(end)
-        self.stride = wrap_number_as_const_expr(stride)
 
     @staticmethod
     def nothing():
@@ -41,21 +40,16 @@ class Interval:
 
     def normalize(self):
         shift = ConstExpr(0)
-        stride = ConstExpr(1)
         # TODO: fix this
         # if not self.start.same_as(ConstExpr(0)) and not self.is_single_point:
         if not self.start.same_as(ConstExpr(0)):
             shift = self.start
             self.end = self.end - self.start
             self.start = ConstExpr(0)
-        if not self.stride.same_as(ConstExpr(1)):
-            stride = self.stride
-            self.stride = ConstExpr(1)
-            self.end = self.end // stride
-        return shift, stride
+        return shift
 
     def __str__(self):
-        return "[{0}, {1}], stride={2}".format(self.start, self.end, self.stride)
+        return "[{0}, {1}]".format(self.start, self.end)
 
 # TODO: implement this
 class IntervalSet:
