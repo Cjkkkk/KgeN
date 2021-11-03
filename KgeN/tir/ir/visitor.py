@@ -85,10 +85,7 @@ class RewriteVisitor(Visitor):
 
     def visit_tensor_slice_expr(self, expr):
         expr.tensor = expr.tensor.accept(self)
-        new_idx = []
-        for index in expr.index:
-            new_idx.append(index.accept(self))
-        expr.index = tuple(new_idx)
+        expr.index = tuple([index.accept(self) for index in expr.index])
         return expr
     
     def visit_unary_expr(self, expr):

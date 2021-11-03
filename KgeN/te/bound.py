@@ -1,6 +1,8 @@
 from KgeN.tir.ir import Expr, TensorExpr, Range, RewriteVisitor
 from KgeN.te.utils import *
 from KgeN.arith.expr_simplifier import expr_simplifier
+from KgeN.tir.transform.expand import expr_expander
+from KgeN.tir.transform.vthread_injection import VthreadDetector
 from KgeN.arith.interval import Interval, union_interval, bound_evaluator
 import math
 
@@ -21,24 +23,24 @@ class RewriteIterVarVisitor(RewriteVisitor):
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
-    shift = [bound.normalize() for bound in bounds]
-    # for bound in bounds:
-    #     bound.end = expr_simplifier.rewrite(bound.end)
-    
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
-    
-    root_axis_to_shift = {}
-    for i, axis in enumerate(tensor.axis):
-        root_axis_to_shift[axis] = axis + shift[i]
-    
+    shift = [bound.normalize() for bound in bounds]
+
+    # storage folding if possible
+    has_vthread = [len(VthreadDetector().detect(expr_expander.rewrite(s))) > 0 for s in shift]
+    tensor.index = [tensor.axis[i] + shift[i] if has_vthread[i] else tensor.axis[i] for i in range(len(tensor.axis))]
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
-            provider.index = tuple([idx - shift[i] for i, idx in enumerate(provider.index)])
+            provider.index = tuple([idx - shift[i] if not has_vthread[i] else idx for i, idx in enumerate(provider.index)])
     
     # must do this after loop normalization: 
     # example: for(i: 3, 5) A[i] = B[i] => for(i: 0, 2) A[i] = B[i + 3]
     if tensor.type != TensorExpr.PLACEHOLDER:
+        root_axis_to_shift = {}
+        for i, axis in enumerate(tensor.axis):
+            root_axis_to_shift[axis] = axis + shift[i]
+        
         visitor = RewriteIterVarVisitor(root_axis_to_shift)
         tensor.expr = visitor.rewrite(tensor.expr)
     return bounds
@@ -150,6 +152,7 @@ def bind_to_axis(rmap, axis_sort):
     for axis in axis_sort:
         axis.range = rmap[axis]
 
+
 def infer_bound_pass(schdule):
     # rmap: {itervar: Range}
     rmap = {}
@@ -163,6 +166,7 @@ def infer_bound_pass(schdule):
         bind_to_axis(rmap, axis_sort)
         # check if axis's range equals to the thread axis's range that it binds to
         check_thread_axis_bound(axis_sort)
+
 
 def check_thread_axis_bound(axis_sort):
     for axis in axis_sort:

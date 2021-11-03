@@ -53,9 +53,9 @@ def gen_stmt_for_stage(stage, stmt):
     
     # generate assign stmt
     tensor = stage.tensor
-    dest = TensorSliceExpr(tensor, tensor.axis)
+    dest = TensorSliceExpr(tensor, tensor.index)
     if isinstance(tensor.expr, ReduceExpr):
-        source = tensor.expr.combinator(TensorSliceExpr(tensor, tensor.axis), tensor.expr.expr)
+        source = tensor.expr.combinator(TensorSliceExpr(tensor, tensor.index), tensor.expr.expr)
     else:
         source = tensor.expr
     new_stmt = AssignStmt(dest, source)
