@@ -141,7 +141,7 @@ class BoundEvaluator(Visitor):
     def visit_iter_expr(self, expr):
         # convert range to interval
         interval = self.rmap[expr].convert_to_interval()
-        interval.end = expr_simplifier.rewrite(interval.end)
+        # interval.end = expr_simplifier.rewrite(interval.end)
         if expr in self.constraint_map:
             interval = intersect_interval(interval, self.constraint_map[expr])
         if expr in self.relax_set:

@@ -4,8 +4,8 @@ from KgeN.tir.ir.stmt import ForStmt
 from KgeN.tir.ir.visitor import RewriteVisitor, CollectVisitor
 
 class VthreadDetector(CollectVisitor):
-    def __init__(self, target):
-        self.target = target
+    def __init__(self):
+        super().__init__()
         self.result = set()
 
     def detect(self, stmt):
@@ -14,7 +14,7 @@ class VthreadDetector(CollectVisitor):
         return self.result
 
     def visit_iter_expr(self, expr):
-        if expr in self.target:
+        if expr.bind_to is not None and expr.bind_to.thread_tag == "vthread":
             self.result.add(expr)
         return
 
@@ -25,19 +25,13 @@ class VThreadInjectionVisitor(RewriteVisitor):
     
     def analysis(self, func):
         return func.accept(self)
-    
-    def visit_for_stmt(self, stmt):
-        if stmt.iter_var.bind_to is not None and stmt.iter_var.bind_to.thread_tag == "vthread":
-            self.vthread_set.add(stmt.iter_var)
-        for i in range(len(stmt.body)):
-            stmt.body[i] = stmt.body[i].accept(self)
-        return stmt
 
     def visit_assign_stmt(self, stmt):
-        detector = VthreadDetector(self.vthread_set)
+        detector = VthreadDetector()
+        result = detector.detect(stmt)
         # see if stmt contains vthread iter, if true, add for loop to the stmt
-        if len(detector.detect(stmt)) > 0:
-            for iter in detector.result:
+        if len(result) > 0:
+            for iter in result:
                 new_iter = IterVar(iter.bind_to.name, iter.range.end, IterVar.DEFAULT)
                 new_stmt = ForStmt(new_iter)
                 new_stmt.body.append(stmt)

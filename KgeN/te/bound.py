@@ -31,12 +31,13 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     root_axis_to_shift = {}
     for i, axis in enumerate(tensor.axis):
         root_axis_to_shift[axis] = axis + shift[i]
-        # root_axis_to_shift[axis] = expr_simplifier.rewrite(root_axis_to_shift[axis])
-        
+    
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
             provider.index = tuple([idx - shift[i] for i, idx in enumerate(provider.index)])
     
+    # must do this after loop normalization: 
+    # example: for(i: 3, 5) A[i] = B[i] => for(i: 0, 2) A[i] = B[i + 3]
     if tensor.type != TensorExpr.PLACEHOLDER:
         visitor = RewriteIterVarVisitor(root_axis_to_shift)
         tensor.expr = visitor.rewrite(tensor.expr)
@@ -50,9 +51,9 @@ def infer_root_iter_bound(stage, rmap):
         # step 1: do pass up for compute_at
         for axis in stage.attach_path:
             # Do not treat certain axis as single point axis
-            if stage.tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.name in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+            if stage.tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.thread_tag in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"]:
                 continue
-            elif stage.tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.name in ["threadIdx.x", "threadIdx.y", "threadIdx.z"]:
+            elif stage.tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.thread_tag in ["threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"]:
                 continue
             rmap[axis] = Range.single_point(axis)
         affected_axis += axis_topo_sort_bottom_up(stage.attach_path)
@@ -82,6 +83,7 @@ def infer_root_iter_bound(stage, rmap):
         for i, axis in enumerate(stage.tensor.axis):
             # convert back to closed_open interval if it is not single
             rmap[axis] = bounds[i].convert_to_range()
+            # Important: only simplify bound here
             rmap[axis].end = expr_simplifier.rewrite(rmap[axis].end)
         # step 5: recover pass_up side effect
         set_rmap(rmap, affected_axis)
