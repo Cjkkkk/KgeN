@@ -11,7 +11,7 @@ x, = C.axis
 xo, xi = s[C].split(x, factor=4)
 s[C].reorder(xi, xo)
 s[B].compute_at(s[C], xi)
-tir = str(KgeN.lower(s, [A, B]))
+tir = str(KgeN.lower(s, [A, C]))
 print(tir)
 
 # 2. vthread
@@ -24,5 +24,5 @@ x, = C.axis
 xo, xi = s[C].split(x, factor=4)
 s[C].bind(xo, te.thread_axis("vthread", name="vx"))
 s[B].compute_at(s[C], xi)
-tir = str(KgeN.lower(s, [A, B]))
+tir = str(KgeN.lower(s, [A, C]))
 print(tir)
