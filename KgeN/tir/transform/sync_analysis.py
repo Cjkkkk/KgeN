@@ -1,4 +1,4 @@
-from KgeN.tir.ir.visitor import Visitor
+from KgeN.tir.ir.visitor import CollectVisitor
 
 
 class AccessEntry:
@@ -9,7 +9,7 @@ class AccessEntry:
         self.tensor = tensor
         self.nest_loop = nest_loop
 
-class SyncAnalysisVisitor(Visitor):
+class SyncAnalysisVisitor(CollectVisitor):
     def __init__(self):
         super().__init__()
         self.access_list = []
@@ -20,7 +20,8 @@ class SyncAnalysisVisitor(Visitor):
         }
     
     def analysis(self, func):
-        return func.accept(self)
+        func.accept(self)
+        return func
     
     def visit_func_stmt(self, stmt):
         for st in stmt.body:
@@ -36,7 +37,6 @@ class SyncAnalysisVisitor(Visitor):
                 else:
                     loop.need_sync_before = True
             self.m[entry.type][entry.tensor] = entry
-        return stmt
     
     def visit_for_stmt(self, stmt):
         self.nest_loop.append(stmt)

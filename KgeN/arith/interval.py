@@ -57,16 +57,13 @@ class IntervalSet:
 
 
 class BoundEvaluator(Visitor):
-    def __init__(self):
+    def __init__(self, rmap, constraint_map, relax_set):
         super().__init__()
-        self.rmap = None
-        self.constraint_map = None
-        self.relax_set = None
-
-    def evaluate(self, expr, rmap, constraint_map, relax_set):
         self.rmap = rmap
         self.constraint_map = constraint_map
         self.relax_set = relax_set
+
+    def evaluate(self, expr):
         return expr.accept(self)
     
     def visit_binary_expr(self, expr):
@@ -85,13 +82,6 @@ class BoundEvaluator(Visitor):
             uu = left.end * right.end
             
             # start and end could be negative
-            # if left.is_single_point and right.is_single_point:
-            #     interval = Interval(Expr.min(ll, uu), Expr.max(ll, uu))
-            # elif left.is_single_point:
-            #     interval = Interval(Expr.min(ll, uu), Expr.max(ll, uu), stride=left.start)
-            # elif right.is_single_point:
-            #     interval = Interval(Expr.min(ll, uu), Expr.max(ll, uu), stride=right.start)
-            # else:
             interval = Interval(
                 Expr.min(Expr.min(Expr.min(ll, lu), ul), uu), 
                 Expr.max(Expr.max(Expr.max(ll, lu), ul), uu), 
@@ -147,5 +137,3 @@ class BoundEvaluator(Visitor):
         if expr in self.relax_set:
             interval = Interval(interval.start.accept(self).start, interval.end.accept(self).end)
         return interval
-
-bound_evaluator = BoundEvaluator()

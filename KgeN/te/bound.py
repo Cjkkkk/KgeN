@@ -1,9 +1,7 @@
 from KgeN.tir.ir import Expr, TensorExpr, Range, RewriteVisitor
 from KgeN.te.utils import *
 from KgeN.arith.expr_simplifier import expr_simplifier
-from KgeN.tir.transform.expand import expr_expander
-from KgeN.tir.transform.vthread_injection import VthreadDetector
-from KgeN.arith.interval import Interval, union_interval, bound_evaluator
+from KgeN.arith.interval import Interval, union_interval, BoundEvaluator
 import math
 
 # bound inference
@@ -19,20 +17,20 @@ class RewriteIterVarVisitor(RewriteVisitor):
     def visit_iter_expr(self, expr):
         if expr in self.map:
             expr = self.map[expr]
-            # expr = expr_simplifier.rewrite(expr)
         return expr
 
 def normalize_bound_and_rewrite_expr(tensor, bounds):
+    # loop normalization: 
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     shift = [bound.normalize() for bound in bounds]
 
-    # storage folding if possible
-    has_vthread = [len(VthreadDetector().detect(expr_expander.rewrite(s))) > 0 for s in shift]
-    tensor.index = [tensor.axis[i] + shift[i] if has_vthread[i] else tensor.axis[i] for i in range(len(tensor.axis))]
+    # storage folding:
+    # has_vthread = [len(VthreadDetector().detect(expr_expander.rewrite(s))) > 0 for s in shift]
+    # tensor.index = [tensor.axis[i] + shift[i] for i in range(len(tensor.axis))]
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
-            provider.index = tuple([idx - shift[i] if not has_vthread[i] else idx for i, idx in enumerate(provider.index)])
+            provider.index = tuple([idx - shift[i] for i, idx in enumerate(provider.index)])
     
     # must do this after loop normalization: 
     # example: for(i: 3, 5) A[i] = B[i] => for(i: 0, 2) A[i] = B[i + 3]
@@ -74,8 +72,9 @@ def infer_root_iter_bound(stage, rmap):
                 constraint_map = {}
                 if hasattr(provider, "constraint"):
                     constraint_map = provider.constraint
-                        
-                new_bounds = [bound_evaluator.evaluate(index, rmap, constraint_map, relax_set) for index in provider.index]
+                
+                bound_evaluator = BoundEvaluator(rmap, constraint_map, relax_set)
+                new_bounds = [bound_evaluator.evaluate(index) for index in provider.index]
                 for i, new_bound in enumerate(new_bounds):
                     bounds[i] = union_interval(bounds[i], new_bound)
 
@@ -115,7 +114,8 @@ def pass_up(rmap, axis_tuple):
             if rmap[axis.split_outer].is_single_point and rmap[axis.split_inner].is_single_point:
                 rmap[axis] = Range.single_point(axis)
             else:
-                interval = bound_evaluator.evaluate(axis.split_outer * axis.split_inner.range.end + axis.split_inner, rmap, {}, {})
+                bound_evaluator = BoundEvaluator(rmap, {}, {})
+                interval = bound_evaluator.evaluate(axis.split_outer * axis.split_inner.range.end + axis.split_inner)
                 rmap[axis] = interval.convert_to_range()
         elif axis.relation == IterVar.FUSE and axis is axis.fused.fused_outer:
             if rmap[axis.fused].is_single_point:

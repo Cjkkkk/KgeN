@@ -9,7 +9,6 @@ class VthreadDetector(CollectVisitor):
         self.result = set()
 
     def detect(self, stmt):
-        self.result = set()
         stmt.accept(self)
         return self.result
 
@@ -31,6 +30,13 @@ class VThreadInjectionVisitor(RewriteVisitor):
         result = detector.detect(stmt)
         # see if stmt contains vthread iter, if true, add for loop to the stmt
         if len(result) > 0:
+            ax = stmt.dest.tensor.axis[0]
+            l = ax.range.end
+            for iter in result:
+                ax = ax + iter * l
+                l *= iter.range.end
+            stmt.dest.index = (ax,) + stmt.dest.index[1:]
+
             for iter in result:
                 new_iter = IterVar(iter.bind_to.name, iter.range.end, IterVar.DEFAULT)
                 new_stmt = ForStmt(new_iter)

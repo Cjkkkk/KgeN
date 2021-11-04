@@ -413,9 +413,6 @@ class TensorExpr(Expr):
 
             if isinstance(self.expr, ReduceExpr):
                 self.reduce_axis = self.expr.reduce_axis
-        
-        # index for store
-        self.index = self.axis
 
     def __getitem__(self, index):
         if not isinstance(index, tuple):
