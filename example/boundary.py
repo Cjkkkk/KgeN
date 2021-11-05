@@ -15,4 +15,3 @@ s[B].compute_at(s[C], C.axis[1])
 # lower
 func = KgeN.lower(s, [A, C])
 print(KgeN.build(func))
-print(A.is_safe, B.is_safe)

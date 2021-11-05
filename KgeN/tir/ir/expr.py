@@ -397,9 +397,6 @@ class TensorExpr(Expr):
         self.dtype = dtype
         self.scope = scope
 
-        # is_safe == True means that no boundary test is needed
-        self.is_safe = True
-
         # tensor's inputs and outputs
         self.inputs = []
         self.outputs = []

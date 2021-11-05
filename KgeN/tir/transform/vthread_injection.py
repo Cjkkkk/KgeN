@@ -1,7 +1,8 @@
-from typing import Iterator
 from KgeN.tir.ir.expr import IterVar
 from KgeN.tir.ir.stmt import ForStmt
 from KgeN.tir.ir.visitor import RewriteVisitor, CollectVisitor
+from KgeN.te.utils import axis_topo_sort_top_down
+
 
 class VthreadDetector(CollectVisitor):
     def __init__(self):
@@ -20,24 +21,45 @@ class VthreadDetector(CollectVisitor):
 class VThreadInjectionVisitor(RewriteVisitor):
     def __init__(self):
         super().__init__()
-        self.vthread_set = set()
+        self.vthread_list = []
     
     def analysis(self, func):
         return func.accept(self)
 
+    def visit_for_stmt(self, stmt):
+        if stmt.iter_var.bind_to is not None and stmt.iter_var.bind_to.thread_tag == "vthread":
+            self.vthread_list.append(stmt.iter_var)
+        for i in range(len(stmt.body)):
+            stmt.body[i] = stmt.body[i].accept(self)
+        return stmt
+    
     def visit_assign_stmt(self, stmt):
         detector = VthreadDetector()
-        result = detector.detect(stmt)
+        detected_vthreads = detector.detect(stmt)
+        detected_vthreads = [vthread for vthread in self.vthread_list if vthread in detected_vthreads]
         # see if stmt contains vthread iter, if true, add for loop to the stmt
-        if len(result) > 0:
-            ax = stmt.dest.tensor.axis[0]
-            l = ax.range.end
-            for iter in result:
-                ax = ax + iter * l
-                l *= iter.range.end
-            stmt.dest.index = (ax,) + stmt.dest.index[1:]
+        if len(detected_vthreads) > 0:
+            tensor = stmt.dest.tensor
+            ax = tensor.axis[0]
+            shift = 0
+            s = ax.range.end
+            print(s, tensor)
+            leaf_axis = axis_topo_sort_top_down(stmt.dest.tensor.axis)
+            
+            for iter in reversed(detected_vthreads):
+                if iter in leaf_axis:
+                    continue
+                shift = iter * s + shift
+                s *= iter.range.end
 
-            for iter in result:
+            stmt.dest.index = (shift + ax,) + stmt.dest.index[1:]
+            tensor.shape = (s, ) + tensor.shape[1:]
+            
+            for output in tensor.outputs:
+                for provider in output.providers[tensor]:
+                    provider.index = (shift + provider.index[0],) + provider.index[1:]
+
+            for iter in detected_vthreads:
                 new_iter = IterVar(iter.bind_to.name, iter.range.end, IterVar.DEFAULT)
                 new_stmt = ForStmt(new_iter)
                 new_stmt.body.append(stmt)

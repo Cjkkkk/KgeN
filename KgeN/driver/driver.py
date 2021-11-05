@@ -1,9 +1,9 @@
-from KgeN.te.bound import infer_bound_pass, check_bound_pass
+from KgeN.te.bound import infer_bound_pass, set_tensor_shape_pass
 from KgeN.te.gen_func import gen_func_pass
 from KgeN.target.cuda_codegen import CUDA_codegen_pass
 from KgeN.target.c_codegen import C_codegen_pass
 from KgeN.target.target import Target
-from KgeN.tir.transform import sync_analysis_pass, inline_injection_pass, expand_pass, vthread_injection_pass
+from KgeN.tir.transform import sync_analysis_pass, inline_injection_pass, expand_pass, vthread_injection_pass, bound_checker_pass
 from KgeN.tir.ir import TensorExpr
 
 def lower(schdule, bufs):
@@ -16,11 +16,12 @@ def lower(schdule, bufs):
 
     inline_injection_pass(schdule)
     infer_bound_pass(schdule)
-    check_bound_pass(schdule)
+    set_tensor_shape_pass(schdule)
     
     func = gen_func_pass(schdule, inputs, outputs)
     func = expand_pass(func)
     func = vthread_injection_pass(func)
+    func = bound_checker_pass(func)
     return func
 
 def build(func, target=Target.CUDA):

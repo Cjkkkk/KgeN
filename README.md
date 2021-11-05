@@ -28,10 +28,10 @@ A TVM-like CUDA/C code generator.
 - [x] transform into stmts
 - [x] tensor index flatten 
 - [x] cache read dataflow rewrite
-- [ ] virtual thread and reduce axis
+- [x] virtual thread and reduce axis
 - [x] cache write
 - [x] move collect input as build graph pass
-- [ ] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
+- [x] expand split axis to enable expr simplify(i - > i_outer * 32 + i_inner)
 - [x] normalize single point or not?
 - [x] add expr simplify single point iter var as const expr
 - [x] add sync_threads()
@@ -44,7 +44,7 @@ A TVM-like CUDA/C code generator.
 - [x] default scope for placeholder is global, for compute is local
 - [ ] consider hash expr to avoid same_as overhead, make expr attribute immutable to make sure re-hash
 - [ ] consider if_then_else when evaluate bound
-- [ ] check if thread range equals to axis range after infer bound
+- [x] check if thread range equals to axis range after infer bound
 - [ ] add interval set
 - [ ] move const folding from tir to expr_simplifier?
 - [ ] add host code

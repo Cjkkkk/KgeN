@@ -26,8 +26,6 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     shift = [bound.normalize() for bound in bounds]
 
     # storage folding:
-    # has_vthread = [len(VthreadDetector().detect(expr_expander.rewrite(s))) > 0 for s in shift]
-    # tensor.index = [tensor.axis[i] + shift[i] for i in range(len(tensor.axis))]
     for output in tensor.outputs:
         for provider in output.providers[tensor]:
             provider.index = tuple([idx - shift[i] for i, idx in enumerate(provider.index)])
@@ -37,7 +35,7 @@ def normalize_bound_and_rewrite_expr(tensor, bounds):
     if tensor.type != TensorExpr.PLACEHOLDER:
         root_axis_to_shift = {}
         for i, axis in enumerate(tensor.axis):
-            root_axis_to_shift[axis] = axis + shift[i]
+            root_axis_to_shift[axis] = shift[i] + axis
         
         visitor = RewriteIterVarVisitor(root_axis_to_shift)
         tensor.expr = visitor.rewrite(tensor.expr)
@@ -174,21 +172,15 @@ def check_thread_axis_bound(axis_sort):
             assert axis.range.end.same_as(axis.bind_to.range.end), "range of axis {0} should equal to range of thread axis {1}, got {2} and {3} respectively.".format(axis.name, axis.bind_to.name, axis.range, axis.bind_to.range)
 
 
-def check_bound_pass(schdule):
+def set_tensor_shape_pass(schdule):
     for stage in schdule.stages:
         tensor = stage.tensor
-        is_safe = True
         new_shape = []
         for idx, root_axis in enumerate(tensor.axis):
             # TODO: add boundary test, can prove?
-            res = isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val
-            if res:
+            if isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val:
                 # can decrease tensor size to save memory
                 new_shape.append(root_axis.range.end)
             else:
                 new_shape.append(tensor.shape[idx])
-            is_safe = is_safe and res
         tensor.shape = tuple(new_shape)
-        tensor.is_safe = is_safe
-                    
-                
