@@ -43,7 +43,6 @@ class VThreadInjectionVisitor(RewriteVisitor):
             ax = tensor.axis[0]
             shift = 0
             s = ax.range.end
-            print(s, tensor)
             leaf_axis = axis_topo_sort_top_down(stmt.dest.tensor.axis)
             
             for iter in reversed(detected_vthreads):
