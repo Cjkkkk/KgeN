@@ -11,11 +11,13 @@ k = te.reduce_axis(K, name="k")
 C = te.compute((M, N), 
     lambda i, j: te.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
-AA = te.cache_read(A, "shared", [C])
-BB = te.cache_read(B, "shared", [C])
 
-s = te.create_schedule(C)
-M, N = C.axis
+s = te.create_schedule(C.op)
+
+AA = s.cache_read(A, "shared", [C])
+BB = s.cache_read(B, "shared", [C])
+
+M, N = s[C].op.axis
 K, = C.reduce_axis
 Mo, Mi = s[C].split(M, 16)
 No, Ni = s[C].split(N, 16)

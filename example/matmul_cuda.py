@@ -12,13 +12,14 @@ C = te.compute((M, N),
     lambda i, j: te.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
-AA = te.cache_read(A, "shared", [C])
-BB = te.cache_read(B, "shared", [C])
-AAA = te.cache_read(AA, "local", [C])
-BBB = te.cache_read(BB, "local", [C])
+s = te.create_schedule(C.op)
 
-s = te.create_schedule(C)
-M, N = C.axis
+AA = s.cache_read(A, "shared", [C])
+BB = s.cache_read(B, "shared", [C])
+AAA = s.cache_read(AA, "local", [C])
+BBB = s.cache_read(BB, "local", [C])
+
+M, N = s[C].op.axis
 K, = C.reduce_axis
 Mo, Mi = s[C].split(M, 4)
 No, Ni = s[C].split(N, 4)
@@ -32,8 +33,8 @@ block_y = te.thread_axis("blockIdx.y")
 thread_x = te.thread_axis("threadIdx.x")
 thread_y = te.thread_axis("threadIdx.y")
 
-AM, AK = AA.axis
-BK, BN = BB.axis
+AM, AK = s[AA].op.axis
+BK, BN = s[BB].op.axis
 
 ATx, _ = s[AA].split(AM, 4)
 ATy, _ = s[AA].split(AK, 8)

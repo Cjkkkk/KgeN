@@ -37,14 +37,16 @@ B = te.compute(
     name="B",
 )
 
-AA = te.cache_read(Apad, "shared", [B])
-WW = te.cache_read(W, "shared", [B])
-AL = te.cache_read(AA, "local", [B])
-WL = te.cache_read(WW, "local", [B])
-BL = te.cache_write(B, "local")
 
 # schedule
-s = te.create_schedule(B)
+s = te.create_schedule(B.op)
+
+AA = s.cache_read(Apad, "shared", [B])
+WW = s.cache_read(W, "shared", [B])
+AL = s.cache_read(AA, "local", [B])
+WL = s.cache_read(WW, "local", [B])
+BL = s.cache_write(B, "local")
+
 s[Apad].compute_inline()
 tile = 8
 num_thread = 8
@@ -58,7 +60,7 @@ block_z = te.thread_axis("blockIdx.z")
 thread_x = te.thread_axis(num_thread, "threadIdx.x")
 thread_y = te.thread_axis(num_thread, "threadIdx.y")
 
-hi, wi, fi, ni = B.axis
+hi, wi, fi, ni = s[B].op.axis
 bz = s[B].fuse(hi, wi)
 by, fi = s[B].split(fi, factor=block_factor)
 bx, ni = s[B].split(ni, factor=block_factor)
@@ -77,7 +79,7 @@ s[B].bind(tx, thread_x)
 
 # Schedule BL local write
 s[BL].compute_at(s[B], tx)
-yi, xi, fi, ni = BL.axis
+yi, xi, fi, ni = s[BL].op.axis
 ry, rx, rc = BL.reduce_axis
 rco, rci = s[BL].split(rc, factor=step)
 s[BL].reorder(rco, ry, rx, rci, fi, ni)
@@ -89,7 +91,7 @@ s[AL].compute_at(s[BL], rci)
 s[WL].compute_at(s[BL], rci)
 
 # Schedule for A's shared memory load
-yi, xi, ci, ni = AA.axis
+yi, xi, ci, ni = s[AA].op.axis
 ty, ci = s[AA].split(ci, nparts=num_thread)
 tx, ni = s[AA].split(ni, nparts=num_thread)
 s[AA].reorder(ty, tx, yi, xi, ci, ni)
@@ -97,7 +99,7 @@ s[AA].bind(ty, thread_y)
 s[AA].bind(tx, thread_x)
 
 # Schedule for W's shared memory load
-yi, xi, ci, fi = WW.axis
+yi, xi, ci, fi = s[WW].op.axis
 ty, ci = s[WW].split(ci, nparts=num_thread)
 tx, fi = s[WW].split(fi, nparts=num_thread)
 s[WW].reorder(ty, tx, yi, xi, ci, fi)

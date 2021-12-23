@@ -12,8 +12,8 @@ C = te.compute((M, N),
     lambda i, j: te.reduce_sum(A[i, k] * B[k, j], axis=k), 
     name="C")
 
-s = te.create_schedule(C)
-M, N = C.axis
+s = te.create_schedule(C.op)
+M, N = s[C].op.axis
 K, = C.reduce_axis
 s[C].reorder(K, N)
 func = KgeN.lower(s, [A, B, C])
