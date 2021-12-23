@@ -52,6 +52,8 @@ A TVM-like CUDA/C code generator.
 - [ ] fix stride.py
 - [x] directory restructure
 - [ ] rebase
+- [ ] operation
+- [ ] block fusion optimization
 
 # example
 ## install
