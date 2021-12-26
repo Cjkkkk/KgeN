@@ -386,44 +386,21 @@ class TensorSliceExpr(Expr):
         return visitor.visit_tensor_slice_expr(self)
 
 class TensorExpr(Expr):
-    PLACEHOLDER = 0
-    COMPUTE = 1
-    def __init__(self, shape, name, tensor_type, compute_func=None, dtype="float", scope="global"):
+    def __init__(self, shape, name, op, dtype="float", scope="global"):
         super().__init__()
         self.shape = tuple([ConstExpr(s) if isinstance(s, int) else s for s in shape])
         self.name = name
-        self.type = tensor_type
-        self.compute_func = compute_func
+        self.op = op
         self.dtype = dtype
         self.scope = scope
-
-        # tensor's inputs and outputs
-        self.inputs = []
-        self.outputs = []
-        self.providers = {}
-
-        # leaf axis
-        self.axis = tuple([IterVar(self.name + "_" + compute_func.__code__.co_varnames[i] if compute_func is not None else 'i' + str(i), v, IterVar.DEFAULT) for i, v in enumerate(self.shape)])
-        self.reduce_axis = ()
-        if tensor_type == TensorExpr.COMPUTE:
-            self.expr = wrap_number_as_const_expr(compute_func(*self.axis))
-
-            if isinstance(self.expr, ReduceExpr):
-                self.reduce_axis = self.expr.reduce_axis
 
     def __getitem__(self, index):
         if not isinstance(index, tuple):
             index = (index, )
-        assert len(index) == len(self.axis), "should provide exactly {0} axis, got {1}.".format(len(self.axis), len(index))
+        assert len(index) == len(self.shape), "should provide exactly {0} axis, got {1}.".format(len(self.shape), len(index))
         index = tuple([wrap_number_as_const_expr(idx) for idx in index])
         tensor_slice = TensorSliceExpr(self, index)
         return tensor_slice
-
-    def is_input(self):
-        return self.type == TensorExpr.PLACEHOLDER
-    
-    def is_output(self):
-        return len(self.outputs) == 0
 
     def same_as(self, other):
         return self is other or (isinstance(other, TensorExpr) and self.name == other.name)

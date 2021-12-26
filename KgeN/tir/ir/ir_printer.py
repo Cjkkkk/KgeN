@@ -31,7 +31,7 @@ class IR_Printer(CollectVisitor):
     
     def generate_tensor_shape(self, func_stmt):
         for stage in func_stmt.schedule.stages:
-            tensor = stage.tensor
+            tensor = stage.op.outputs[0]
             self.emit("// tensor: {0}".format(TensorSliceExpr(tensor, tensor.shape)))
     
     def visit_func_stmt(self, stmt):
@@ -75,7 +75,7 @@ class IR_Printer(CollectVisitor):
         if not var.range.is_single_point and var.bind_to is None:
             self.exit_scope()
             self.emit("}")
-    
+
     def visit_binary_expr(self, expr):
         if expr.type == Expr.MIN or expr.type == Expr.MAX or expr.type == Expr.CEIL_DIV: # min, max, ceil_div
             return "({1}({0}, {2}))".format(expr.left.accept(self), self.op_mapping[expr.type], expr.right.accept(self))

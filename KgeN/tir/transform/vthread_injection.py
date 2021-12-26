@@ -22,6 +22,7 @@ class VThreadInjectionVisitor(RewriteVisitor):
     def __init__(self):
         super().__init__()
         self.vthread_list = []
+        self.rewrite_map = {}
     
     def analysis(self, func):
         return func.accept(self)
@@ -33,6 +34,12 @@ class VThreadInjectionVisitor(RewriteVisitor):
             stmt.body[i] = stmt.body[i].accept(self)
         return stmt
     
+    def visit_tensor_slice_expr(self, expr):
+        if expr.tensor in self.rewrite_map:
+            shift = self.rewrite_map[expr.tensor]
+            expr.index = (shift + expr.index[0],) + expr.index[1:]
+        return expr
+
     def visit_assign_stmt(self, stmt):
         detector = VthreadDetector()
         detected_vthreads = detector.detect(stmt)
@@ -40,10 +47,10 @@ class VThreadInjectionVisitor(RewriteVisitor):
         # see if stmt contains vthread iter, if true, add for loop to the stmt
         if len(detected_vthreads) > 0:
             tensor = stmt.dest.tensor
-            ax = tensor.axis[0]
+            ax = tensor.op.axis[0]
             shift = 0
             s = ax.range.end
-            leaf_axis = axis_topo_sort_top_down(stmt.dest.tensor.axis)
+            leaf_axis = axis_topo_sort_top_down(stmt.dest.tensor.op.axis)
             
             for iter in reversed(detected_vthreads):
                 if iter in leaf_axis:
@@ -54,15 +61,17 @@ class VThreadInjectionVisitor(RewriteVisitor):
             stmt.dest.index = (shift + ax,) + stmt.dest.index[1:]
             tensor.shape = (s, ) + tensor.shape[1:]
             
-            for output in tensor.outputs:
-                for provider in output.providers[tensor]:
-                    provider.index = (shift + provider.index[0],) + provider.index[1:]
+            self.rewrite_map[tensor] = shift
 
+            stmt.source = stmt.source.accept(self)
+            
             for iter in detected_vthreads:
                 new_iter = IterVar(iter.bind_to.name, iter.range.end, IterVar.DEFAULT)
                 new_stmt = ForStmt(new_iter)
                 new_stmt.body.append(stmt)
                 stmt = new_stmt
+        else:
+            stmt.source = stmt.source.accept(self)
         return stmt
 
 def vthread_injection_pass(func):

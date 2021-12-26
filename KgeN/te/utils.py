@@ -36,6 +36,12 @@ def topo_sort(iterable, get_output):
                 nodes_queue.append(out_node)
     return solutions
 
+def op_topo_sort_bottom_up(op):
+    def get_output(op):
+        return [inp.op for inp in op.inputs]
+    res = topo_sort([op], get_output)
+    return res
+
 def tensor_topo_sort_bottom_up(tensor):
     def get_output(tensor):
         return tensor.inputs

@@ -46,7 +46,7 @@ class SyncAnalysisVisitor(CollectVisitor):
     
     def visit_assign_stmt(self, stmt):
         tensor = stmt.dest.tensor
-        for inp in tensor.inputs:
+        for inp in tensor.op.inputs:
             if inp.scope == "shared":
                 self.access_list.append(AccessEntry(AccessEntry.READ, inp, tuple(self.nest_loop)))
         if tensor.scope == "shared":

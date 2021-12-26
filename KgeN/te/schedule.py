@@ -1,37 +1,91 @@
-from KgeN.tir.ir import *
-from .build_graph import build_graph
-from .operation import compute
-from .utils import axis_topo_sort_top_down, tensor_topo_sort_bottom_up
+from KgeN.tir.ir.expr import *
+from KgeN.tir.ir.visitor import RewriteVisitor
+from .build_graph import CollectInputVisitor
+from .operation import ComputeOp, compute
+from .utils import axis_topo_sort_top_down, op_topo_sort_bottom_up
 import math
 
 
 # schedule primitives
-def create_schedule(tensor):
-    build_graph(tensor)
-    tensors = tensor_topo_sort_bottom_up(tensor)
-    s = Schedule(tensors)
+def create_schedule(op):
+    s = Schedule(op)
     return s
 
 class Schedule:
-    def __init__(self, tensors):
-        self.tensors = tensors
+    def __init__(self, output_op):
+        # build_graph(output_op)
+        ops = op_topo_sort_bottom_up(output_op)
+        self.output_op = output_op
+        self.ops = ops
         self.stages = []
         self.stage_map = {}
 
-        for tensor in tensors:
-            stage = Stage(tensor)
+        self.feed_graph = {}
+        self.attach_path = {}
+        
+        for op in ops:
+            stage = Stage(op)
             self.stages.append(stage)
-            self.stage_map[tensor] = stage
-            for output in tensor.outputs:
-                stage.outputs.append(self.stage_map[output])
+            self.stage_map[op] = stage
+
+        self.stage_map[output_op].is_output = True
 
     def __getitem__(self, tensor):
-        return self.stage_map[tensor]
+        return self.stage_map[tensor.op]
+
+    def cache_read(self, tensor, scope, readers):
+        cache_tensor_name = tensor.name + "_" + scope
+        lambda_str = "def _ ({0}): return tensor[{0}]".format(", ".join([tensor.op.compute_func.__code__.co_varnames[i] if hasattr(tensor.op, "compute_func") else 'i' + str(i) for i in range(len(tensor.shape))]))
+        local_vars = {}
+        exec(lambda_str, {"tensor": tensor}, local_vars)
+        compiled = local_vars["_"]
+        cache_tensor = compute(tensor.shape, compiled, cache_tensor_name, scope)
+        dataflow_rewriter.add_mapping(tensor, cache_tensor)
+        
+        # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
+        for reader in readers:
+            reader.op.expr = dataflow_rewriter.rewrite(reader.op.expr)
+            visitor = CollectInputVisitor()
+            reader.op.inputs, reader.op.providers = visitor.collect(reader.op.expr)
+        
+        self.__init__(self.output_op)
+        return cache_tensor
+
+    def cache_write(self, tensor, scope):
+        # TODO: fix compute, use local
+        cache_tensor_name = tensor.name + "_" + scope
+        cache_tensor = TensorExpr(tensor.shape, cache_tensor_name, tensor.op, scope=scope)
+        cache_tensor.op.outputs = [cache_tensor]
+        for axis in cache_tensor.op.axis:
+            axis.name = axis.name.replace(tensor.name, cache_tensor.name, 1)
+
+        # change tensor's compute_func
+        lambda_str = "def _ ({0}): return cache_tensor[{0}]".format(", ".join([tensor.op.compute_func.__code__.co_varnames[i] if hasattr(tensor.op, "compute_func") else 'i' + str(i) for i in range(len(tensor.shape))]))
+        local_vars = {}
+        exec(lambda_str, {"cache_tensor": cache_tensor}, local_vars)
+        compiled = local_vars["_"]
+
+        fake = compute(tensor.shape, compiled, tensor.name, tensor.scope)
+        tensor.op = fake.op
+        tensor.op.outputs = [tensor]
+
+        # all_reduce_axis = set(axis_topo_sort_top_down(tensor.op.reduce_axis))
+        # new_axis = tuple([axis for axis in tensor.op.axis if axis not in all_reduce_axis])
+        # tensor.op.reduce_axis = ()
+        # tensor.op.axis = new_axis
+
+        if cache_tensor.op is self.output_op:
+            self.__init__(tensor.op)
+        else:
+            self.__init__(self.output_op)
+        # TODO: what to do with attach information?
+        return cache_tensor
 
 class Stage:
-    def __init__(self, tensor):
-        self.tensor = tensor
-        self.outputs = []
+    def __init__(self, op):
+        self.op = op
+        # is output stage
+        self.is_output = False
         # compute at
         self.attached = False
         self.attach_at = None
@@ -39,16 +93,20 @@ class Stage:
         # tensor's attach_path, only used when compute_at
         # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
         self.attach_path = ()
-        self.leaf_axis = list(self.tensor.axis + self.tensor.reduce_axis)
+
+        if isinstance(op, ComputeOp):
+            self.leaf_axis = list(self.op.axis + self.op.reduce_axis)
 
     def check_axis(self, *axis):
+        assert isinstance(self.op, ComputeOp), "Can not schedule placeholder operation."
         for ax in axis:
-            assert ax in self.leaf_axis, "{0} is not {1}'s axis".format(ax.name, self.tensor.name)
+            assert ax in self.leaf_axis, "{0} is not {1}'s axis".format(ax.name, self.op.outputs[0].name)
+
 
     def bind(self, ax, thread_axis):
-        assert thread_axis.type == IterVar.BIND, "should provide thread_axis."
-        assert ax.bind_to is None, "already bind to another thread axis {}".format(ax.bind_to.name)
-        assert ax.type == IterVar.DEFAULT or ax.type == IterVar.REDUCE, "can not bind axis of {} type".format(ax.type)
+        assert thread_axis.type == IterVar.BIND, "Should provide thread_axis."
+        assert ax.bind_to is None, "Already bind to another thread axis {}".format(ax.bind_to.name)
+        assert ax.type == IterVar.DEFAULT or ax.type == IterVar.REDUCE, "Can not bind axis of {} type".format(ax.type)
         ax.bind_to = thread_axis
 
     def split(self, ax, factor=-1, nparts=-1):
@@ -160,40 +218,3 @@ class RewriteDataFlowVisitor(RewriteVisitor):
         return expr
 
 dataflow_rewriter = RewriteDataFlowVisitor()
-
-def cache_read(tensor, scope, readers):
-    cache_tensor_name = tensor.name + "_" + scope
-    lambda_str = "def _ ({0}): return tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))
-    local_vars = {}
-    exec(lambda_str, {"tensor": tensor}, local_vars)
-    compiled = local_vars["_"]
-    cache_tensor = compute(tensor.shape, compiled, cache_tensor_name, scope)
-    dataflow_rewriter.add_mapping(tensor, cache_tensor)
-    
-    # rewrite dataflow from tensor -> readers to tensor -> cache_tensor -> readers
-    for reader in readers:
-        reader.expr = dataflow_rewriter.rewrite(reader.expr)
-    return cache_tensor
-
-def cache_write(tensor, scope):
-    # TODO: fix compute, use local
-    cache_tensor_name = tensor.name + "_" + scope
-    cache_tensor = compute(tensor.shape, tensor.compute_func, cache_tensor_name, scope)
-    cache_tensor.expr = dataflow_rewriter.rewrite(cache_tensor.expr)
-    
-    # change tensor's compute_func
-    lambda_str = "def _ ({0}): return cache_tensor[{0}]".format(", ".join([tensor.compute_func.__code__.co_varnames[i] if tensor.compute_func is not None else 'i' + str(i) for i in range(len(tensor.shape))]))
-    local_vars = {}
-    exec(lambda_str, {"cache_tensor": cache_tensor}, local_vars)
-    compiled = local_vars["_"]
-
-    tensor.compute_func = compiled
-    tensor.expr = tensor.compute_func(*tensor.axis)
-
-    all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
-    new_axis = tuple([axis for axis in tensor.axis if axis not in all_reduce_axis])
-    tensor.reduce_axis = ()
-    tensor.axis = new_axis
-
-    # TODO: what to do with attach information?
-    return cache_tensor

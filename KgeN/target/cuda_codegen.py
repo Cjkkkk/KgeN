@@ -39,7 +39,7 @@ class CUDA_code_generator(IR_Printer):
     def generate_storage(self, func_stmt):
         from functools import reduce
         for stage in func_stmt.schedule.stages:
-            tensor = stage.tensor
+            tensor = stage.op.outputs[0]
             if tensor.scope == "local":
                 self.emit("{0} {1}[{2}];".format(tensor.dtype, tensor.name, reduce(lambda x, y: x * y, tensor.shape).accept(self)))
             elif tensor.scope == "shared":

@@ -80,7 +80,7 @@ s[B].bind(tx, thread_x)
 # Schedule BL local write
 s[BL].compute_at(s[B], tx)
 yi, xi, fi, ni = s[BL].op.axis
-ry, rx, rc = BL.reduce_axis
+ry, rx, rc = s[BL].op.reduce_axis
 rco, rci = s[BL].split(rc, factor=step)
 s[BL].reorder(rco, ry, rx, rci, fi, ni)
 
@@ -107,5 +107,5 @@ s[WW].bind(ty, thread_y)
 s[WW].bind(tx, thread_x)
 
 func = KgeN.lower(s, [A, W, B])
-print(str(func))
+# print(str(func))
 print(KgeN.build(func))

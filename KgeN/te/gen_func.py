@@ -1,15 +1,16 @@
+from KgeN.te.operation import PlaceholderOp
 from KgeN.tir.ir import ForStmt, FuncStmt, AssignStmt, IterVar, ReduceExpr, TensorSliceExpr, TensorExpr
 from KgeN.te.utils import axis_topo_sort_top_down
 from KgeN.te import Stage
 
 def add_reduce_init(stage, fake_axis):
-    tensor = stage.tensor
+    tensor = stage.op.outputs[0]
     attach_axis = fake_axis
     init_axis = []
 
-    if isinstance(tensor.expr, ReduceExpr):
+    if isinstance(stage.op.expr, ReduceExpr):
         # reduce expression
-        all_reduce_axis = set(axis_topo_sort_top_down(tensor.reduce_axis))
+        all_reduce_axis = set(axis_topo_sort_top_down(tensor.op.reduce_axis))
         first_reduce_idx = 0
         for idx, axis in enumerate(stage.leaf_axis):
             if axis in all_reduce_axis:
@@ -20,13 +21,19 @@ def add_reduce_init(stage, fake_axis):
         for axis in stage.leaf_axis[first_reduce_idx + 1:]:
             if axis not in all_reduce_axis:
                 init_axis.append(axis)
+        
         # TODO: fix this, use te.compute
         import copy
         init = copy.copy(tensor)
-        init_stage = Stage(init)
+        init_op = copy.copy(init.op)
         copy_init_axis = copy.deepcopy(init_axis)
+
+
+        init.op = init_op
+        init_stage = Stage(init_op)
         init_stage.leaf_axis = copy_init_axis
-        init.expr = tensor.expr.init
+        init_stage.op.expr = tensor.op.expr.init
+        
         # avoid unintentional attach
         for axis in copy_init_axis:
             axis.attached_computation = []
@@ -52,12 +59,13 @@ def gen_stmt_for_stage(stage, stmt):
             gen_stmt_for_stage(computation, stmt)
     
     # generate assign stmt
-    tensor = stage.tensor
-    dest = TensorSliceExpr(tensor, tensor.axis)
-    if isinstance(tensor.expr, ReduceExpr):
-        source = tensor.expr.combinator(TensorSliceExpr(tensor, tensor.axis), tensor.expr.expr)
+    tensor = stage.op.outputs[0]
+    expr = stage.op.expr
+    dest = TensorSliceExpr(tensor, stage.op.axis)
+    if isinstance(expr, ReduceExpr):
+        source = expr.combinator(dest, expr.expr)
     else:
-        source = tensor.expr
+        source = expr
     new_stmt = AssignStmt(dest, source)
     stmt.body.append(new_stmt)
         
@@ -67,7 +75,7 @@ def gen_func_pass(schdule, inputs, outputs):
     func_stmt.input_tensors = inputs
     func_stmt.output_tensors = outputs
     for stage in reversed(schdule.stages):
-        if stage.tensor.type == TensorExpr.PLACEHOLDER or stage.attached:
+        if isinstance(stage.op, PlaceholderOp) or stage.attached:
             continue
         gen_stmt_for_stage(stage, func_stmt)
     return func_stmt

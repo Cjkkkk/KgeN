@@ -1,18 +1,52 @@
-from KgeN.tir.ir import *
+from KgeN.tir.ir.expr import *
+from KgeN.te.build_graph import CollectInputVisitor
 from KgeN.arith.constraint import constraint_evaluator
 from KgeN.arith.expr_simplifier import expr_simplifier
 import math
+
+
+class Operation:
+    def __init__(self):
+        # Operation's inputs and outputs
+        self.inputs = []
+        self.outputs = []
+        self.providers = {}
+
+class PlaceholderOp(Operation):
+    def __init__(self):
+        super().__init__()
+
+
+class ComputeOp(Operation):
+    def __init__(self, shape, name, compute_func):
+        super().__init__()
+        self.compute_func = compute_func
+        # leaf axis
+        self.axis = tuple([IterVar(name + "_" + compute_func.__code__.co_varnames[i], v, IterVar.DEFAULT) for i, v in enumerate(shape)])
+        self.reduce_axis = ()
+
+        self.expr = wrap_number_as_const_expr(self.compute_func(*self.axis))
+        if isinstance(self.expr, ReduceExpr):
+            self.reduce_axis = self.expr.reduce_axis
 
 # compute primitives
 def var(name):
     return VarExpr(name)
 
 def placeholder(shape, name):
-    return TensorExpr(shape, name, TensorExpr.PLACEHOLDER)
+    op = PlaceholderOp()
+    output = TensorExpr(shape, name, op)
+    op.outputs = [output]
+    return output
 
 def compute(shape, function, name, scope="local"):
-    tensor = TensorExpr(shape, name, TensorExpr.COMPUTE, function, scope=scope)
-    return tensor
+    op = ComputeOp(shape, name, function)
+    output = TensorExpr(shape, name, op, scope=scope)
+
+    visitor = CollectInputVisitor()
+    op.inputs, op.providers = visitor.collect(op.expr)
+    op.outputs = [output]
+    return output
 
 def if_then_else(condition, then_expr, else_expr):
     expr = IfThenElseExpr(condition, then_expr, else_expr)

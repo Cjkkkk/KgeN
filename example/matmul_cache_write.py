@@ -40,7 +40,7 @@ BTx, _ = s[BB].split(BK, 8)
 BTy, _ = s[BB].split(BN, 4)
 
 M, N = s[CCC].op.axis
-K, = CCC.reduce_axis
+K, = s[CCC].op.reduce_axis
 Ko, Ki = s[CCC].split(K, 32)
 s[CCC].reorder(Ko, Ki, M, N)
 s[CCC].unroll(M)

@@ -1,3 +1,5 @@
+from KgeN.te import schedule
+from KgeN.te.operation import ComputeOp
 from KgeN.tir.ir import Expr, TensorExpr, Range, RewriteVisitor
 from KgeN.te.utils import *
 from KgeN.arith.expr_simplifier import expr_simplifier
@@ -19,52 +21,55 @@ class RewriteIterVarVisitor(RewriteVisitor):
             expr = self.map[expr]
         return expr
 
-def normalize_bound_and_rewrite_expr(tensor, bounds):
+def normalize_bound_and_rewrite_expr(schedule, stage, bounds):
+    tensor = stage.op.outputs[0]
     # loop normalization: 
     # change provider index according to bound normalizatoin since index must start from 0
     # for example: [-3, 125) is normalized to [0, 128)
     shift = [bound.normalize() for bound in bounds]
 
     # storage folding:
-    for output in tensor.outputs:
-        for provider in output.providers[tensor]:
+    for feed_stage in schedule.feed_graph[stage]:
+        for provider in feed_stage.op.providers[tensor]:
             provider.index = tuple([idx - shift[i] for i, idx in enumerate(provider.index)])
     
     # must do this after loop normalization: 
     # example: for(i: 3, 5) A[i] = B[i] => for(i: 0, 2) A[i] = B[i + 3]
-    if tensor.type != TensorExpr.PLACEHOLDER:
+    if isinstance(stage.op, ComputeOp):
         root_axis_to_shift = {}
-        for i, axis in enumerate(tensor.axis):
+        for i, axis in enumerate(stage.op.axis):
             root_axis_to_shift[axis] = shift[i] + axis
         
         visitor = RewriteIterVarVisitor(root_axis_to_shift)
-        tensor.expr = visitor.rewrite(tensor.expr)
+        tensor.expr = visitor.rewrite(stage.op.expr)
     return bounds
 
-def infer_root_iter_bound(stage, rmap):
-    if not stage.tensor.is_output():
+def infer_root_iter_bound(schedule, stage, rmap):
+    if not stage.is_output:
         # nothing union a = a
-        bounds = [Interval.nothing() for _ in stage.tensor.axis] 
+        bounds = [Interval.nothing() for _ in stage.op.axis] 
         affected_axis = []
         # step 1: do pass up for compute_at
-        for axis in stage.attach_path:
+        attach_path = schedule.attach_path[stage]
+        for axis in attach_path:
+            tensor = stage.op.outputs[0]
             # Do not treat certain axis as single point axis
-            if stage.tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.thread_tag in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"]:
+            if tensor.scope == "global" and axis.bind_to is not None and axis.bind_to.thread_tag in ["blockIdx.x", "blockIdx.y", "blockIdx.z", "threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"]:
                 continue
-            elif stage.tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.thread_tag in ["threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"]:
+            elif tensor.scope == "shared" and axis.bind_to is not None and axis.bind_to.thread_tag in ["threadIdx.x", "threadIdx.y", "threadIdx.z", "vthread"]:
                 continue
             rmap[axis] = Range.single_point(axis)
-        affected_axis += axis_topo_sort_bottom_up(stage.attach_path)
+        affected_axis += axis_topo_sort_bottom_up(attach_path)
         pass_up(rmap, affected_axis)
 
         # step 2: calculate bound of producer
-        for output in stage.outputs:
-            for provider in output.tensor.providers[stage.tensor]:
+        for feed_stage in schedule.feed_graph[stage]:
+            for provider in feed_stage.op.providers[stage.op.outputs[0]]:
                 relax_set = set()
                 # TODO: fix this
-                if stage.attach_at is not output and len(output.attach_path) > 0:
+                if stage.attach_at is not feed_stage and len(schedule.attach_path[feed_stage]) > 0:
                     # tensor is not attached at current provider
-                    for axis in output.tensor.axis:
+                    for axis in feed_stage.op.axis:
                         relax_set.add(axis)
 
                 constraint_map = {}
@@ -77,9 +82,9 @@ def infer_root_iter_bound(stage, rmap):
                     bounds[i] = union_interval(bounds[i], new_bound)
 
         # step 3: normalize bounds
-        bounds = normalize_bound_and_rewrite_expr(stage.tensor, bounds)
+        bounds = normalize_bound_and_rewrite_expr(schedule, stage, bounds)
         # step 4: set range of root axis so later it can be propagated to leaf
-        for i, axis in enumerate(stage.tensor.axis):
+        for i, axis in enumerate(stage.op.axis):
             # convert back to closed_open interval if it is not single
             rmap[axis] = bounds[i].convert_to_range()
             # Important: only simplify bound here
@@ -132,38 +137,26 @@ def set_rmap(rmap, axis_sort):
         rmap[axis] = axis.range
 
 
-def create_attach_path(stage):
-    cur_stage = stage
-    attach_path = []
-    while cur_stage.attached:
-        cur_attach_path = []
-        for axis in cur_stage.attach_at.leaf_axis:
-            cur_attach_path.append(axis)
-            if axis is cur_stage.attach_axis:
-                attach_path += reversed(cur_attach_path)
-                break
-        cur_stage = cur_stage.attach_at
-    stage.attach_path = tuple(attach_path)
-
-
 def bind_to_axis(rmap, axis_sort):
     for axis in axis_sort:
         axis.range = rmap[axis]
 
 
-def infer_bound_pass(schdule):
+def infer_bound_pass(schedule):
     # rmap: {itervar: Range}
     rmap = {}
-    for stage in schdule.stages:
-        axis_sort = axis_topo_sort_top_down(stage.tensor.axis + stage.tensor.reduce_axis)
-        set_rmap(rmap, axis_sort)
-        create_attach_path(stage)
-        infer_root_iter_bound(stage, rmap)
-        pass_down(rmap, axis_sort)
-        # set axis's range from rmap
-        bind_to_axis(rmap, axis_sort)
-        # check if axis's range equals to the thread axis's range that it binds to
-        check_thread_axis_bound(axis_sort)
+    for stage in schedule.stages:
+        if isinstance(stage.op, ComputeOp):
+            axis_sort = axis_topo_sort_top_down(stage.op.axis + stage.op.reduce_axis)
+            set_rmap(rmap, axis_sort)
+            
+            infer_root_iter_bound(schedule, stage, rmap)
+            pass_down(rmap, axis_sort)
+            
+            # set axis's range from rmap
+            bind_to_axis(rmap, axis_sort)
+            # check if axis's range equals to the thread axis's range that it binds to
+            check_thread_axis_bound(axis_sort)
 
 
 def check_thread_axis_bound(axis_sort):
@@ -172,15 +165,16 @@ def check_thread_axis_bound(axis_sort):
             assert axis.range.end.same_as(axis.bind_to.range.end), "range of axis {0} should equal to range of thread axis {1}, got {2} and {3} respectively.".format(axis.name, axis.bind_to.name, axis.range, axis.bind_to.range)
 
 
-def set_tensor_shape_pass(schdule):
-    for stage in schdule.stages:
-        tensor = stage.tensor
-        new_shape = []
-        for idx, root_axis in enumerate(tensor.axis):
-            # TODO: add boundary test, can prove?
-            if isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val:
-                # can decrease tensor size to save memory
-                new_shape.append(root_axis.range.end)
-            else:
-                new_shape.append(tensor.shape[idx])
-        tensor.shape = tuple(new_shape)
+def set_tensor_shape_pass(schedule):
+    for stage in schedule.stages:
+        if isinstance(stage.op, ComputeOp):
+            tensor = stage.op.outputs[0]
+            new_shape = []
+            for idx, root_axis in enumerate(stage.op.axis):
+                # TODO: add boundary test, can prove?
+                if isinstance(root_axis.range.end, ConstExpr) and isinstance(tensor.shape[idx], ConstExpr) and root_axis.range.end.val <= tensor.shape[idx].val:
+                    # can decrease tensor size to save memory
+                    new_shape.append(root_axis.range.end)
+                else:
+                    new_shape.append(tensor.shape[idx])
+            tensor.shape = tuple(new_shape)
