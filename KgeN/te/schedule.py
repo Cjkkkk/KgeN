@@ -13,7 +13,6 @@ def create_schedule(op):
 
 class Schedule:
     def __init__(self, output_op):
-        # build_graph(output_op)
         ops = op_topo_sort_bottom_up(output_op)
         self.output_op = output_op
         self.ops = ops
@@ -21,6 +20,8 @@ class Schedule:
         self.stage_map = {}
 
         self.feed_graph = {}
+        # tensor's attach_path, only used when compute_at
+        # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
         self.attach_path = {}
         
         for op in ops:
@@ -90,9 +91,6 @@ class Stage:
         self.attached = False
         self.attach_at = None
         self.is_inline = False
-        # tensor's attach_path, only used when compute_at
-        # for example: A.compute_at(B, B.axis[1]), then A.attach_path = (B.axis[1], B.axis[0])
-        self.attach_path = ()
 
         if isinstance(op, ComputeOp):
             self.leaf_axis = list(self.op.axis + self.op.reduce_axis)
