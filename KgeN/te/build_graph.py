@@ -48,8 +48,6 @@ def create_attach_path(schedule):
                     break
             cur_stage = cur_stage.attach_at
         attach_path[stage] = tuple(path)
-    for stage in attach_path:
-        print(attach_path[stage])
     schedule.attach_path = attach_path
 
 
