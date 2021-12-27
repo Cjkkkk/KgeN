@@ -54,7 +54,7 @@ def test_if_then_else():
     assert x.range.end.val == 2
     assert y.range.end.val == 1
 
-def test_if_then_else():
+def test_if_then_else1():
     A = te.placeholder((8, 8), name="A")
     B = te.compute((8, 8), lambda i, j: A[i, j], name="B")
     C = te.compute((5, 5), lambda i, j: te.if_then_else(
