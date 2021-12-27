@@ -43,7 +43,7 @@ A TVM-like CUDA/C code generator.
 - [ ] compute inline
 - [x] default scope for placeholder is global, for compute is local
 - [ ] consider hash expr to avoid same_as overhead, make expr attribute immutable to make sure re-hash
-- [ ] consider if_then_else when evaluate bound
+- [x] consider if_then_else when evaluate bound
 - [x] check if thread range equals to axis range after infer bound
 - [ ] add interval set
 - [ ] move const folding from tir to expr_simplifier?

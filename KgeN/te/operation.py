@@ -1,6 +1,6 @@
 from KgeN.tir.ir.expr import *
 from KgeN.te.build_graph import CollectInputVisitor
-from KgeN.arith.constraint import constraint_evaluator
+from KgeN.arith.constraint import ConstraintAttacher, constraint_evaluator
 from KgeN.arith.expr_simplifier import expr_simplifier
 import math
 
@@ -52,12 +52,15 @@ def if_then_else(condition, then_expr, else_expr):
     expr = IfThenElseExpr(condition, then_expr, else_expr)
     expr.condition = expr_simplifier.rewrite(condition)
     
-    then_constraint = constraint_evaluator.evaluator(expr.condition)
-    else_constraint = constraint_evaluator.evaluator(Expr.not_(expr.condition))
-    expr.then_expr.constraint = then_constraint
-    expr.else_expr.constraint = else_constraint
+    then_constraint = constraint_evaluator.evaluate(expr.condition)
+    else_constraint = constraint_evaluator.evaluate(Expr.not_(expr.condition))
+
+    # expr.then_expr.constraint = then_constraint
+    # expr.else_expr.constraint = else_constraint
     # TODO:
     # recursively add to sub expr
+    ConstraintAttacher(then_constraint).attach(expr.then_expr)
+    ConstraintAttacher(else_constraint).attach(expr.else_expr)
     return expr
 
 def all(*condition):

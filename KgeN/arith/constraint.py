@@ -1,12 +1,13 @@
-from KgeN.tir.ir import ConstExpr, Expr, RewriteVisitor
+from KgeN.tir.ir import ConstExpr, Expr, RewriteVisitor, CollectVisitor
 from KgeN.arith.interval import Interval, union_interval, intersect_interval
 import math
+
 
 class ConstraintEvaluator(RewriteVisitor):
     def __init__(self):
         super().__init__()
     
-    def evaluator(self, expr):
+    def evaluate(self, expr):
         return expr.accept(self)
     
     def visit_binary_expr(self, expr):
@@ -59,5 +60,26 @@ class ConstraintEvaluator(RewriteVisitor):
             return map
         else:
             raise ValueError("unsupported type.")
+
+
+class ConstraintAttacher(CollectVisitor):
+    def __init__(self, constraint):
+        super().__init__()
+        self.constraint = constraint
+    
+    def attach(self, expr):
+        expr.accept(self)
+    
+    def visit_tensor_slice_expr(self, expr):
+        if hasattr(expr, "constraint"):
+            for var in self.constraint:
+                if var in expr.constraint:
+                    expr.constraint[var] = intersect_interval(self.constraint[var], expr.constraint[var])
+                else:
+                    expr.constraint[var] = self.constraint[var]
+        else:
+            expr.constraint = self.constraint
+        for index in expr.index:
+            index.accept(self)
 
 constraint_evaluator = ConstraintEvaluator()

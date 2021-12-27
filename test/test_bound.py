@@ -46,10 +46,27 @@ def test_fuse():
 def test_if_then_else():
     A = te.placeholder((8, 8), name="A")
     B = te.compute((8, 8), lambda i, j: A[i, j], name="B")
-    C = te.compute((3, 3), lambda i, j: te.if_then_else(te.all(i < 2, j < 1), B[i, j], 0), name="C")
+    C = te.compute((3, 3), lambda i, j: te.if_then_else(te.all(i < 2, j < 1), B[i, j] + 1, 0), name="C")
 
     s = te.create_schedule(C.op)
     KgeN.lower(s, [A, C])
     x, y = s[B].op.axis
     assert x.range.end.val == 2
     assert y.range.end.val == 1
+
+def test_if_then_else():
+    A = te.placeholder((8, 8), name="A")
+    B = te.compute((8, 8), lambda i, j: A[i, j], name="B")
+    C = te.compute((5, 5), lambda i, j: te.if_then_else(
+        te.all(i < 4, j < 4), 
+        te.if_then_else(
+            te.all(i > 2, j > 1), 
+            B[i, j] + 1, 
+            0), 
+        0), name="C")
+
+    s = te.create_schedule(C.op)
+    KgeN.lower(s, [A, C])
+    x, y = s[B].op.axis
+    assert x.range.end.val == 1
+    assert y.range.end.val == 2
