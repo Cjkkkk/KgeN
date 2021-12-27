@@ -42,3 +42,14 @@ def test_fuse():
     fused = s[B].fuse(x, y)
     KgeN.lower(s, [A, B])
     assert fused.range.end.val == 64
+
+def test_if_then_else():
+    A = te.placeholder((8, 8), name="A")
+    B = te.compute((8, 8), lambda i, j: A[i, j], name="B")
+    C = te.compute((3, 3), lambda i, j: te.if_then_else(te.all(i < 2, j < 1), B[i, j], 0), name="C")
+
+    s = te.create_schedule(C.op)
+    KgeN.lower(s, [A, C])
+    x, y = s[B].op.axis
+    assert x.range.end.val == 2
+    assert y.range.end.val == 1
