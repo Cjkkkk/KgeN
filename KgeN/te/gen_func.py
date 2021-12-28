@@ -25,9 +25,8 @@ def add_reduce_init(stage, fake_axis):
         # TODO: fix this, use te.compute
         import copy
         init = copy.copy(tensor)
-        init_op = copy.copy(init.op)
-        copy_init_axis = copy.deepcopy(init_axis)
-
+        init_op = copy.copy(tensor.op)
+        copy_init_axis = copy.copy(init_axis)
 
         init.op = init_op
         init_stage = Stage(init_op)
