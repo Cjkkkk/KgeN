@@ -157,6 +157,7 @@ def infer_bound_pass(schedule):
             bind_to_axis(rmap, axis_sort)
             # check if axis's range equals to the thread axis's range that it binds to
             check_thread_axis_bound(axis_sort)
+    return rmap
 
 
 def check_thread_axis_bound(axis_sort):

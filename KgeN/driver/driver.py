@@ -7,6 +7,7 @@ from KgeN.tir.transform import sync_analysis_pass, inline_injection_pass, expand
 from KgeN.te.operation import ComputeOp, PlaceholderOp
 from KgeN.te.build_graph import create_feed_graph, create_attach_path
 
+
 def lower(schdule, bufs):
     inputs = [t for t in bufs if isinstance(t.op, PlaceholderOp)]
     outputs = [t for t in bufs if isinstance(t.op, ComputeOp)]
